@@ -44,18 +44,20 @@ jobs:
           java-version: 21
           cache: maven
 
-      - name: Start backend (Spring Boot)
+      - name: Build backend
         working-directory: backend
         run: |
           chmod +x mvnw
-          nohup ./mvnw -B spring-boot:run > ../backend.log 2>&1 &
+          ./mvnw -B package -DskipTests
+
+      - name: Start backend (Spring Boot)
+        working-directory: backend
+        run: |
+          nohup java -jar target/*.jar > ../backend.log 2>&1 &
           echo $! > ../backend.pid
 
       - name: Wait for backend
-        run: |
-          node -v || true
-          npm -v || true
-          npx --yes wait-on@7 http://localhost:8080
+        run: npx --yes wait-on@7 http://localhost:8080/actuator/health --timeout 60000
 
       # ---- API tests: Bruno ----
       - name: Install Bruno CLI
@@ -93,7 +95,7 @@ jobs:
           echo $! > ../frontend.pid
 
       - name: Wait for frontend
-        run: npx --yes wait-on@7 http://127.0.0.1:4173
+        run: npx --yes wait-on@7 http://127.0.0.1:4173 --timeout 30000
 
       - name: Run Playwright E2E
         working-directory: frontend
