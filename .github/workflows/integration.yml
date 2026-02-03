@@ -64,9 +64,8 @@ jobs:
         run: npm install -g @usebruno/cli
 
       - name: Run Bruno API tests
-        working-directory: backend
-        run: |
-          bru run ./bruno --env ci
+        working-directory: backend/bruno
+        run: bru run --env ci
 
       # ---- Frontend: install + build/preview + Playwright ----
       - name: Setup Node 22
