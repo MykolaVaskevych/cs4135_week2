@@ -1,0 +1,6 @@
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:MykolaVaskevych/cs4135_week2_frontend.git
+[submodule "backend"]
+	path = backend
+	url = git@github.com:MykolaVaskevych/cs4135_week2_backend.git
