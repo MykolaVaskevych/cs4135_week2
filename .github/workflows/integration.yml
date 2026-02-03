@@ -1,0 +1,119 @@
+name: Integration (Submodules + API + E2E)
+
+on:
+  pull_request:
+    branches: [ develop-nick, main ]
+  push:
+    branches: [ develop-nick, main ]
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.CI_SSH_KEY }}
+
+      - name: Trust github.com host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: Checkout parent + submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Show pinned submodule commits
+        run: |
+          git submodule status
+          (cd frontend && git rev-parse HEAD)
+          (cd backend && git rev-parse HEAD)
+
+      # ---- Backend: build + run in background ----
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Start backend (Spring Boot)
+        working-directory: backend
+        run: |
+          chmod +x mvnw
+          nohup ./mvnw -B spring-boot:run > ../backend.log 2>&1 &
+          echo $! > ../backend.pid
+
+      - name: Wait for backend
+        run: |
+          node -v || true
+          npm -v || true
+          npx --yes wait-on@7 http://localhost:8080
+
+      # ---- API tests: Bruno ----
+      - name: Install Bruno CLI
+        run: npm install -g @usebruno/cli
+
+      - name: Run Bruno API tests
+        working-directory: backend
+        run: |
+          bru run ./bruno --env ci
+
+      # ---- Frontend: install + build/preview + Playwright ----
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: frontend
+        run: npx playwright install --with-deps
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Start frontend preview
+        working-directory: frontend
+        run: |
+          nohup npm run preview -- --host 127.0.0.1 --port 4173 > ../frontend.log 2>&1 &
+          echo $! > ../frontend.pid
+
+      - name: Wait for frontend
+        run: npx --yes wait-on@7 http://127.0.0.1:4173
+
+      - name: Run Playwright E2E
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://127.0.0.1:4173
+          API_BASE_URL: http://localhost:8080
+        run: npm run test:e2e
+
+      # ---- Always cleanup and upload logs if something fails ----
+      - name: Cleanup
+        if: always()
+        run: |
+          if [ -f backend.pid ]; then kill $(cat backend.pid) || true; fi
+          if [ -f frontend.pid ]; then kill $(cat frontend.pid) || true; fi
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-logs
+          path: |
+            backend.log
+            frontend.log
