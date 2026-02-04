@@ -11,7 +11,7 @@
 - Java (OpenJDK 21)
 - Docker
 - Lefthook
-- Bruno CLI (API testing)
+- Bruno & Bruno CLI (API testing)
 
 ### Version Managers (extra, just in case if you will need it)
 
