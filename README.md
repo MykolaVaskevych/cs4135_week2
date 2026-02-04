@@ -5,6 +5,23 @@
 [![Frontend CI](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml)
 [![Backend CI](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml)
 
+## Requirements
+
+- Node.js
+- Java (OpenJDK 21)
+- Docker
+- Lefthook
+- Bruno CLI (API testing)
+
+### Version Managers (extra, just in case if you will need it)
+
+- `nvm` / `fnm` - Node.js version switching
+- `sdkman` - JDK version switching
+- `archlinux-java` - JDK switching (Arch) <-- PS: i use this one :)
+- `jenv` - JDK switching (macOS)
+
+---
+
 Monorepo with git submodules for frontend (React + Vite) and backend (Spring Boot).
 
 ## Repository Structure
@@ -37,6 +54,7 @@ git submodule update --init --recursive
 ## Running the Project
 
 ### Frontend (React + Vite)
+
 ```bash
 cd frontend
 npm install
@@ -45,6 +63,7 @@ npm run dev
 ```
 
 ### Backend (Spring Boot)
+
 ```bash
 cd backend
 ./mvnw spring-boot:run
@@ -60,6 +79,7 @@ lefthook install
 ```
 
 Hooks:
+
 - `post-checkout`: Auto-update submodules
 - `post-merge`: Auto-update submodules
 
