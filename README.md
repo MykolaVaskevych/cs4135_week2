@@ -1,4 +1,9 @@
-# cs4135_week2
+# CS4135 Week 2
+
+[![StandWithUkraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg)](https://github.com/vshymanskyy/StandWithUkraine/blob/main/docs/README.md)
+[![Integration](https://github.com/MykolaVaskevych/cs4135_week2/actions/workflows/integration.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2/actions/workflows/integration.yml)
+[![Frontend CI](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml)
+[![Backend CI](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml)
 
 Monorepo with git submodules for frontend (React + Vite) and backend (Spring Boot).
 
@@ -8,15 +13,16 @@ Monorepo with git submodules for frontend (React + Vite) and backend (Spring Boo
 cs4135_week2/          # Parent repo
 ├── frontend/          # Submodule -> cs4135_week2_frontend
 ├── backend/           # Submodule -> cs4135_week2_backend
-└── README.md
+├── lefthook.yml       # Git hooks config
+└── .github/workflows/ # Integration CI
 ```
 
 ## Branch Strategy
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production/deployment - submodules point to their `main` branches |
-| `develop-nick` | Development - submodules point to their `develop-nick` branches |
+| `deploy` | Production - protected, requires PR |
+| `development` | Default branch for development |
 
 ## Cloning the Project
 
@@ -27,74 +33,6 @@ git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_week2.git
 # Or if already cloned without submodules
 git submodule update --init --recursive
 ```
-
-## Switching Branches
-
-When switching branches in the parent, submodules don't auto-switch. Always run:
-
-```bash
-git checkout develop-nick
-git submodule update --recursive
-```
-
-## Making Changes
-
-### 1. Working in a Submodule (frontend or backend)
-
-```bash
-cd frontend  # or backend
-
-# Make sure you're on the right branch
-git checkout develop-nick
-
-# Make changes, then commit
-git add .
-git commit -m "your message"
-git push origin develop-nick
-```
-
-### 2. Updating Parent to Track New Submodule Commits
-
-After committing in a submodule, the parent repo sees it as "modified":
-
-```bash
-cd ..  # back to parent repo
-git status
-# Shows: modified: frontend (new commits)
-
-# Stage the submodule reference update
-git add frontend  # or backend
-git commit -m "Update frontend submodule"
-git push origin develop-nick
-```
-
-## Common Operations
-
-### Pull Latest Changes (All Repos)
-
-```bash
-git pull origin develop-nick
-git submodule update --recursive --remote
-```
-
-### Check Submodule Status
-
-```bash
-git submodule status
-```
-
-### See Which Commit Submodules Point To
-
-```bash
-git ls-tree HEAD frontend backend
-```
-
-## Important Rules
-
-1. **Always commit in submodule first, then update parent** - Never commit parent without pushing submodule changes first
-2. **Keep branches in sync** - When on `develop-nick` in parent, submodules should be on `develop-nick`
-3. **Don't edit submodule files from parent without entering the submodule directory**
-4. **After clone/pull, always run `git submodule update`** - Submodules don't auto-update
 
 ## Running the Project
 
@@ -111,28 +49,48 @@ npm run dev
 cd backend
 ./mvnw spring-boot:run
 # Runs on http://localhost:8080
-# H2 Console: http://localhost:8080/h2-console
 ```
 
-## Merging to Main (Deployment)
+## Pre-commit Hooks
+
+Install [Lefthook](https://github.com/evilmartians/lefthook) for automatic submodule updates:
 
 ```bash
-# In each submodule first
-cd frontend
-git checkout main
-git merge develop-nick
-git push origin main
+lefthook install
+```
 
-cd ../backend
-git checkout main
-git merge develop-nick
-git push origin main
+Hooks:
+- `post-checkout`: Auto-update submodules
+- `post-merge`: Auto-update submodules
 
-# Then in parent
-cd ..
-git checkout main
-git submodule update
-git add frontend backend
-git commit -m "Update submodules for release"
-git push origin main
+## Making Changes
+
+### 1. Working in a Submodule
+
+```bash
+cd frontend  # or backend
+# Make changes, commit, push
+git add .
+git commit -m "your message"
+git push origin development
+```
+
+### 2. Updating Parent
+
+After committing in a submodule:
+
+```bash
+cd ..  # back to parent
+git add frontend  # or backend
+git commit -m "Update frontend submodule"
+git push origin development
+```
+
+## Deployment
+
+Create a PR from `development` to `deploy`. CI must pass before merge.
+
+```bash
+# Or via CLI
+gh pr create --base deploy --head development
 ```
