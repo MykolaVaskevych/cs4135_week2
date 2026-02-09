@@ -2,9 +2,9 @@ name: Integration (Submodules + API + E2E)
 
 on:
   pull_request:
-    branches: [development, deploy]
+    branches: [development, main]
   push:
-    branches: [development, deploy]
+    branches: [development, main]
 
 permissions:
   contents: read

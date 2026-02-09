@@ -38,7 +38,7 @@ cs4135_week2/          # Parent repo
 
 | Branch | Purpose |
 |--------|---------|
-| `deploy` | Production - protected, requires PR |
+| `main` | Production - protected, requires PR |
 | `development` | Default branch for development |
 
 ## Cloning the Project
@@ -108,9 +108,9 @@ git push origin development
 
 ## Deployment
 
-Create a PR from `development` to `deploy`. CI must pass before merge.
+Create a PR from `development` to `main`. CI must pass before merge.
 
 ```bash
 # Or via CLI
-gh pr create --base deploy --head development
+gh pr create --base main --head development
 ```
