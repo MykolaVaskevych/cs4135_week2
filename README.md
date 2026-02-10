@@ -5,7 +5,7 @@
 | # | Name | Student ID | Role |
 |---|------|------------|------|
 | 1 | Mykola Vaskevych | 22372199 | ??? |
-| 2 | _TBD_ | _TBD_ | ??? |
+| 2 | Xunze Tan | 24247472 | ??? |
 | 3 | _TBD_ | _TBD_ | ??? |
 | 4 | _TBD_ | _TBD_ | ??? |
 | 5 | _TBD_ | _TBD_ | ??? |
