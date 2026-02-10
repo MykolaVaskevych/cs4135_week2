@@ -1,9 +1,38 @@
 # CS4135 Week 2
 
-[![StandWithUkraine](https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg)](https://github.com/vshymanskyy/StandWithUkraine/blob/main/docs/README.md)
-[![Integration](https://github.com/MykolaVaskevych/cs4135_week2/actions/workflows/integration.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2/actions/workflows/integration.yml)
-[![Frontend CI](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_frontend/actions/workflows/ci.yml)
-[![Backend CI](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml/badge.svg)](https://github.com/MykolaVaskevych/cs4135_week2_backend/actions/workflows/ci.yml)
+## Team Members
+
+| # | Name | Student ID | Role |
+|---|------|------------|------|
+| 1 | Mykola Vaskevych | 22372199 | ??? |
+| 2 | _TBD_ | _TBD_ | ??? |
+| 3 | _TBD_ | _TBD_ | ??? |
+| 4 | _TBD_ | _TBD_ | ??? |
+| 5 | _TBD_ | _TBD_ | ??? |
+
+**Communication channels:**
+
+TODO:
+
+## Application Scenario
+
+TODO:
+
+## Project Requirements
+
+TODO
+
+## Project Setup (Marking Scheme) – 5 Marks
+
+| Criteria | Status | Excellent (Full Marks) | Good | Basic | Poor (0 Marks) | Marks |
+|----------|--------|----------------------|------|-------|-----------------|-------|
+| **Team Formation & Organisation** | :x: | Team is fully formed, roles are clearly assigned, and communication channels are established. | Team formed with minor gaps in roles or organisation. | Team formed, but roles are unclear, or the communication setup is incomplete. | Team not clearly formed or no organisation evident. | 1 |
+| **Application Scenario Description** | :x: | The scenario is clear, detailed, well-structured, and provides a strong context for the project. | The scenario is generally clear with minor missing details. | The scenario is vague, incomplete, or lacks clarity. | No scenario or extremely poor description. | 1 |
+| **Basic Project Requirements** | :x: | Requirements are well-defined, relevant, and logically derived from the scenario. | Requirements are mostly clear with some minor gaps. | Limited or unclear requirements; missing key elements. | No requirements or irrelevant content. | 1 |
+| **GitHub/GitLab Repository Setup** | :white_check_mark: | Repository fully created, well-structured, includes README, folders, and proper version control practices. | Repository created with basic structure; minor improvements needed. | The repository exists, but poorly structured or missing documentation. | No repository or unusable structure. | 1 |
+| **Wiki Setup for Collaboration & Documentation** | :x: | Wiki created with clear structure, sections for documentation, and visible team contributions. | Wiki is set up but incomplete or lacking some structure. | Wiki minimally created; poor organization or missing content. | No Wiki created. | 1 |
+
+---
 
 ## Requirements
 
