@@ -4,7 +4,7 @@
 
 | # | Name | Student ID | Role |
 |---|------|------------|------|
-| 1 | Mykola Vaskevych | 22372199 | ??? |
+| 1 | Mykola Vaskevych | 22372199 | Full Stack Dev |
 | 2 | Xunze Tan | 24247472 | ??? |
 | 3 | _TBD_ | _TBD_ | ??? |
 | 4 | _TBD_ | _TBD_ | ??? |
