@@ -4,11 +4,11 @@
 
 | # | Name | Student ID | Role |
 |---|------|------------|------|
-| 1 | Mykola Vaskevych | 22372199 | Full Stack Dev & QA|
-| 2 | Xunze Tan | 24247472 | Leader |
+| 1 | Mykola Vaskevych | 22372199 | Full Stack Dev & QA |
+| 2 | Xunze Tan | 24247472 | Leader & Full Stack Dev |
 | 3 | Zitao Zhang | 24247464 | Full Stack Dev |
-| 4 | Zihan Zhuo | 24247456 | Frentend Dev |
-| 5 | _TBD_ | _TBD_ | ??? |
+| 4 | Zihan Zhuo | 24247456 | Frontend Dev |
+| 5 | Oliver Fitgerald | 22365958 | Full Stack Dev |
 
 **Communication channels:**
 
