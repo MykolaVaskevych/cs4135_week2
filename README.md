@@ -36,6 +36,25 @@ TODO
 
 ## Requirements
 
+- User can register
+- User can log in
+- User can top up his wallet
+- User can place a bid
+- User can check his bids on different items
+- User gets notified if he won a bidding
+- User can see items and select on which he wants to bid
+- User can see a dashboard with his bids
+- User should receive his item (maybe moking or something, notification with his address details or email)
+- User can place an item with initial price, photo, desription and a dealine, also "buy now price"
+
+items db author as user 123
+
+- Admin can check a dashboard (users, items, categories,)
+- Admin can log in to dashboard
+- Admin can modify categories
+- Admin can ban a User
+- Admin can manage items, description, time til bidding ends, etc
+
 - Node.js
 - Java (OpenJDK 21)
 - Docker
