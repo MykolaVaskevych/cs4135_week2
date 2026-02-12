@@ -1,4 +1,4 @@
-# CS4135 Week 2
+# Auction Platform for CS4135 Project
 
 ## Team Members
 
@@ -36,24 +36,65 @@ TODO
 
 ## Requirements
 
-- User can register
-- User can log in
-- User can top up his wallet
-- User can place a bid
-- User can check his bids on different items
-- User gets notified if he won a bidding
-- User can see items and select on which he wants to bid
-- User can see a dashboard with his bids
-- User should receive his item (maybe moking or something, notification with his address details or email)
-- User can place an item with initial price, photo, desription and a dealine, also "buy now price"
+### Functional Requirements
 
-items db author as user 123
+#### Authentication
 
-- Admin can check a dashboard (users, items, categories,)
-- Admin can log in to dashboard
-- Admin can modify categories
-- Admin can ban a User
-- Admin can manage items, description, time til bidding ends, etc
+- User can register and login
+
+#### User Profile
+
+- Users can view and edit their profile
+- Users can manage their shipping addresses
+
+#### Item Listings
+
+- Users can list items with title, description, photos, starting price，deadline, and buy-now price
+- Users can browse and search available items
+- Items are organized by categories
+
+#### Bidding
+
+- Users can place bids on active auctions
+- Bids must be higher than the current price
+- Users can view a dashboard with all their bids
+- Real-time price updates via SSE
+
+#### Orders
+
+- An order is created automatically when an auction ends
+- Winner receives a notification with delivery details
+- Sellers can mark orders as shipped
+- Buyers can confirm delivery
+
+#### Payments
+
+- Users can top up their wallet
+- Payment is deducted from wallet balance when an auction is won
+- Users can view transaction history
+
+#### Notifications
+
+- Users are notified when they are outbid
+- Users are notified when they win an auction
+- Sellers are notified when their item is sold
+- Users can view and manage their notifications
+
+#### Administration
+
+- Admins can log in to an admin dashboard
+- Admins can manage users, items and categories
+
+### Non-Functional Requirements
+
+- Microservice architecture
+- Each service has its own PostgreSQL database
+- Asynchronous event-driven communication via RabbitMQ
+- RESTful APIs
+- JWT-based authentication
+- Containerized deployment via Docker Compose
+
+### Prerequisites
 
 - Node.js
 - Java (OpenJDK 21)
