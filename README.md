@@ -4,7 +4,7 @@
 
 | # | Name | Student ID | Role |
 |---|------|------------|------|
-| 1 | Mykola Vaskevych | 22372199 | Full Stack Dev |
+| 1 | Mykola Vaskevych | 22372199 | Full Stack Dev & QA|
 | 2 | Xunze Tan | 24247472 | Leader |
 | 3 | Zitao Zhang | 24247464 | Full Stack Dev |
 | 4 | Zihan Zhuo | 24247456 | Frentend Dev |
