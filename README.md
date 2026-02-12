@@ -6,8 +6,8 @@
 |---|------|------------|------|
 | 1 | Mykola Vaskevych | 22372199 | Full Stack Dev |
 | 2 | Xunze Tan | 24247472 | Leader |
-| 3 | Zitaon Zhang | 24247464 | Full Stack Dev |
-| 4 | _TBD_ | _TBD_ | ??? |
+| 3 | Zitao Zhang | 24247464 | Full Stack Dev |
+| 4 | Zihan Zhuo | 24247456 | Frentend Dev |
 | 5 | _TBD_ | _TBD_ | ??? |
 
 **Communication channels:**
