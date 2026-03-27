@@ -22,7 +22,7 @@ package "<<BoundedContext>>\n**Auction Context**\nOwner: Mykola V.\n//Core Domai
 package "<<BoundedContext>>\n**Admin Context**\nOwner: Mykola V.\n//Supporting Subdomain//\nOwns: Category + Reports + Moderation" as AdminCtx #FFE0B2 {
 }
 
-package "<<BoundedContext>>\n**Account Context**\nOwner: Xunze T.\n//Generic Subdomain//\nOwns: User + Auth + Address" as AccountCtx #B3E5FC {
+package "<<BoundedContext>>\n**Account Context**\nOwner: Xunze T.\n//Supporting Subdomain//\nOwns: User + Auth + Address" as AccountCtx #B3E5FC {
 }
 
 package "<<BoundedContext>>\n**Payment Context**\nOwner: Zitao Z.\n//Supporting Subdomain//\nOwns: Wallet + Transaction + Escrow" as PaymentCtx #B3E5FC {
@@ -62,11 +62,10 @@ Broker -[#FF6600]--> NotifCtx : "BidPlaced → outbid alert\nAuctionSold → win
 Broker -[#FF6600]--> CatalogueCtx : "AuctionCreated → index listing\nAuctionSold/Ended/Cancelled\n→ update listing status\nAuctionCompleted → finalize listing\n(Catalogue is a read projection)"
 
 ' --- Admin publishes ---
-AdminCtx -[#9C27B0,bold]--> Broker : "**publishes:**\nListingRemovedByAdmin\nUserModerated\nCategoryCreated/Updated/Deleted\nReportSubmitted / ReportResolved"
+AdminCtx -[#9C27B0,bold]--> Broker : "**publishes:**\nListingRemovedByAdmin\nCategoryCreated/Updated/Deleted\nReportSubmitted / ReportResolved"
 
 ' --- Admin event consumers ---
 Broker -[#9C27B0]--> AuctionCtx : "ListingRemovedByAdmin\n→ auction.markRemoved()\nCategoryCreated/Updated/Deleted\n→ update local CategoryRef cache"
-Broker -[#9C27B0]--> AccountCtx : "UserModerated\n→ update user status"
 Broker -[#9C27B0]--> CatalogueCtx : "ListingRemovedByAdmin\n→ remove from index\nCategoryCreated/Updated/Deleted\n→ update category filters"
 
 ' --- Payment publishes ---
@@ -103,7 +102,7 @@ Broker -[#5D4037]--> NotifCtx : "UserRegistered → welcome"
 
 AuctionCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: validate bidder\n(ACL: User → BidderRef)"
 
-AdminCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: search/read users\n(ACL: User → UserSnapshot)"
+AdminCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
 
 AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion"
 

@@ -1,0 +1,132 @@
+@startuml Account_Context
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam class {
+    BackgroundColor<<AggregateRoot>> #FFEEDD
+    BackgroundColor<<Entity>> #E8F5E9
+    BackgroundColor<<ValueObject>> #E3F2FD
+    BackgroundColor<<Enumeration>> #E3F2FD
+    BackgroundColor<<DomainEvent>> #FFF9C4
+    BackgroundColor<<DomainService>> #F3E5F5
+    BackgroundColor<<Repository>> #ECEFF1
+}
+
+package "Account Context\n(Supporting Subdomain)" {
+
+    class User <<AggregateRoot>> {
+        - userId : UUID
+        - email : String
+        - passwordHash : String
+        - firstName : String
+        - lastName : String
+        - role : UserRole
+        - isActive : Boolean
+        - createdAt : DateTime
+        + register()
+        + login() : AuthToken
+        + resetPassword()
+        + updateProfile()
+        + addAddress(address : ShippingAddress)
+        + removeAddress(addressId : UUID)
+        + suspend()
+        + ban()
+    }
+
+    enum UserRole <<Enumeration>> {
+        BUYER
+        SELLER
+        DELIVERY_DRIVER
+        ADMIN
+    }
+
+    class ShippingAddress <<Entity>> {
+        - addressId : UUID
+        - addressLine1 : String
+        - addressLine2 : String
+        - city : String
+        - county : String
+        - eircode : String
+        - isDefault : Boolean
+    }
+
+    class AuthToken <<ValueObject>> {
+        - token : String
+        - issuedAt : DateTime
+        - expiresAt : DateTime
+    }
+
+    class UserRegisteredEvent <<DomainEvent>> {
+        - userId : UUID
+        - email : String
+        - occurredAt : DateTime
+    }
+
+    class PasswordResetRequestedEvent <<DomainEvent>> {
+        - userId : UUID
+        - email : String
+        - occurredAt : DateTime
+    }
+
+    class ProfileUpdatedEvent <<DomainEvent>> {
+        - userId : UUID
+        - changedFields : List<String>
+        - occurredAt : DateTime
+    }
+
+    class UserSuspendedEvent <<DomainEvent>> {
+        - userId : UUID
+        - adminId : UUID
+        - reason : String
+        - occurredAt : DateTime
+    }
+
+    class UserBannedEvent <<DomainEvent>> {
+        - userId : UUID
+        - adminId : UUID
+        - reason : String
+        - occurredAt : DateTime
+    }
+
+    class AuthenticationService <<DomainService>> {
+        + authenticate(email, password) : AuthToken
+        + validateToken(token) : Boolean
+    }
+
+    class PasswordResetService <<DomainService>> {
+        + requestReset(email) : void
+        + confirmReset(token, newPassword) : void
+    }
+
+    class UserRepository <<Repository>> {
+        + findById(userId) : User
+        + findByEmail(email) : User
+        + save(user) : void
+        + delete(userId) : void
+    }
+
+    ' -- Relationships --
+    User "1" *-- "0..*" ShippingAddress : has >
+    User "1" -- "0..*" AuthToken : authenticated via >
+    User -- UserRole : has >
+    User ..> UserRegisteredEvent : publishes >
+    User ..> PasswordResetRequestedEvent : publishes >
+    User ..> ProfileUpdatedEvent : publishes >
+    User ..> UserSuspendedEvent : publishes >
+    User ..> UserBannedEvent : publishes >
+    UserRepository --> User : manages >
+    AuthenticationService --> UserRepository : uses >
+    AuthenticationService ..> AuthToken : creates >
+    PasswordResetService --> UserRepository : uses >
+}
+
+note bottom of User
+  <b>Aggregate Invariants:</b>
+  1. Email must be unique across all users
+  2. Password must meet complexity requirements
+  3. Only one ShippingAddress can be marked as default
+  4. Role change must be performed by ADMIN only
+  5. Suspend/ban can only be invoked via Admin API
+end note
+
+@enduml

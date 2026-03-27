@@ -1,0 +1,119 @@
+@startuml API_Gateway_Context
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+skinparam class {
+    BackgroundColor<<AggregateRoot>> #FFEEDD
+    BackgroundColor<<Entity>> #E8F5E9
+    BackgroundColor<<ValueObject>> #E3F2FD
+    BackgroundColor<<Enumeration>> #E3F2FD
+    BackgroundColor<<DomainEvent>> #FFF9C4
+    BackgroundColor<<DomainService>> #F3E5F5
+    BackgroundColor<<Repository>> #ECEFF1
+}
+
+package "API Gateway Context\n(Infrastructure)" {
+
+    class RouteDefinition <<AggregateRoot>> {
+        - routeId : UUID
+        - serviceId : String
+        - pathPattern : String
+        - methods : List<HttpMethod>
+        - requiresAuth : Boolean
+        - isActive : Boolean
+        + matchesRequest(path, method) : Boolean
+        + activate()
+        + deactivate()
+    }
+
+    class RateLimitPolicy <<ValueObject>> {
+        - maxRequests : Integer
+        - windowSeconds : Integer
+    }
+
+    class ServiceEndpoint <<ValueObject>> {
+        - serviceId : String
+        - basePath : String
+        - healthCheckPath : String
+    }
+
+    class TokenValidationResult <<ValueObject>> {
+        - valid : Boolean
+        - userId : UUID
+        - role : String
+        - expiresAt : DateTime
+    }
+
+    enum HttpMethod <<Enumeration>> {
+        GET
+        POST
+        PUT
+        DELETE
+        PATCH
+    }
+
+    class RequestRouter <<DomainService>> {
+        + route(path, method) : ServiceEndpoint
+        + isServiceAvailable(serviceId) : Boolean
+    }
+
+    class TokenValidationService <<DomainService>> {
+        + validate(token) : TokenValidationResult
+    }
+
+    class RateLimiter <<DomainService>> {
+        + isAllowed(clientId, routeId) : Boolean
+    }
+
+    class RouteRepository <<Repository>> {
+        + findByPathAndMethod(path, method) : RouteDefinition
+        + findAll() : List<RouteDefinition>
+        + save(route) : void
+    }
+
+    class RateLimitExceededEvent <<DomainEvent>> {
+        - clientId : String
+        - routeId : UUID
+        - occurredAt : DateTime
+    }
+
+    class TokenValidationFailedEvent <<DomainEvent>> {
+        - token : String
+        - reason : String
+        - occurredAt : DateTime
+    }
+
+    class RouteNotFoundEvent <<DomainEvent>> {
+        - requestPath : String
+        - method : String
+        - occurredAt : DateTime
+    }
+
+    ' -- Relationships --
+    RouteDefinition "1" *-- "0..1" RateLimitPolicy : has >
+    RouteDefinition "1" *-- "1" ServiceEndpoint : routes to >
+    RouteDefinition -- HttpMethod : allows >
+    RouteRepository --> RouteDefinition : manages >
+    RequestRouter --> RouteRepository : uses >
+    RequestRouter ..> RouteNotFoundEvent : publishes >
+    RateLimiter --> RateLimitPolicy : enforces >
+    RateLimiter ..> RateLimitExceededEvent : publishes >
+    TokenValidationService ..> TokenValidationResult : returns >
+    TokenValidationService ..> TokenValidationFailedEvent : publishes >
+}
+
+note bottom of RouteDefinition
+  <b>Aggregate Invariants:</b>
+  1. Each route must have a unique pathPattern + method combination
+  2. RateLimitPolicy values must be positive if present
+  3. Inactive routes must not participate in request matching
+end note
+
+note right of TokenValidationService
+  <b>Anti-Corruption Layer (ACL):</b>
+  Translates Account context's
+  AuthToken into a local
+  TokenValidationResult value object
+end note
+
+@enduml
