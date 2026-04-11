@@ -31,7 +31,7 @@ package "<<BoundedContext>>\n**Payment Context**\nOwner: Zitao Z.\n//Supporting 
 package "<<BoundedContext>>\n**Order Context**\nOwner: Zitao Z.\n//Supporting Subdomain//\nOwns: Order lifecycle" as OrderCtx #B3E5FC {
 }
 
-package "<<BoundedContext>>\n**Catalogue Context**\n⚠ Owner: **UNASSIGNED**\n//Read Projection//\nIndexes Listing+Auction for search.\nNeeds team allocation (A1)." as CatalogueCtx #FFCDD2 {
+package "<<BoundedContext>>\n**Catalogue Context**\nOwner: Zihan\n//Read Projection//\nIndexes Listing+Auction for\nsearch, filtering, and category\nactive-listing counts." as CatalogueCtx #FFF9C4 {
 }
 
 package "<<BoundedContext>>\n**Delivery/Escrow Context**\nOwner: Oliver F.\n//Supporting Subdomain//\nOwns: Delivery lifecycle" as DeliveryCtx #C8E6C9 {
@@ -104,11 +104,48 @@ AuctionCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: valida
 
 AdminCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
 
-AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion"
+AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deactivation (INV-2)"
 
 AdminCtx .[#0277BD,dashed].> AuctionCtx : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
 
 GatewayCtx .[#616161,dashed].> AccountCtx : "REST: validate JWT\n+ role-based routing"
+
+' ============================================================
+' DDD / LEMMA FRAMING (paper reference)
+' ============================================================
+note top of Broker
+    **Inter-context contract style — Published Language**
+    ————————————————————————————————
+    Every inter-context coupling on this map is one
+    of three DDD patterns (per Sorgalla, Wizenty,
+    Rademacher, Sachweh & Zündorf, 2021, *Applying
+    Model-Driven Engineering to Stimulate the Adoption
+    of DevOps Processes in SMOs*, §Background and
+    §Language Ecosystem for Modeling Microservice
+    Architecture):
+
+    • **Published Language** — solid arrows through
+      the broker. Events are self-contained; consumers
+      never call back to the producer. This preserves
+      the *service-specific independence* the paper
+      names as a defining MSA property.
+    • **Customer-Supplier** — dashed REST arrows. The
+      downstream context tolerates the upstream API
+      contract as-is but wraps it in an ACL Value
+      Object so that upstream model changes never
+      leak into the downstream domain.
+    • **Conformist** — Notification accepts upstream
+      schemas verbatim (no ACL). Paper calls this
+      out as acceptable when the downstream has no
+      domain logic of its own to defend.
+
+    This context map is the **Domain Data viewpoint**
+    at the inter-context level. The per-context PUMLs
+    give the same viewpoint at the intra-context level.
+    `runtime_view_{1_sync,2_async,3_infra}.puml` gives a lightweight version of
+    the paper's **Operation viewpoint** (Fig. 3
+    Lakeside Mutual style).
+end note
 
 ' ============================================================
 ' SAGA
@@ -157,7 +194,7 @@ legend bottom left
     | <#FFE0B2> | Mykola (Auction + Admin + CI/CD) |
     | <#B3E5FC> | Xunze (Account + Gateway) / Zitao (Payment + Order) |
     | <#C8E6C9> | Oliver (Delivery/Escrow + Notification) |
-    | <#FFCDD2> | ⚠ Unassigned (needs team allocation) |
+    | <#FFF9C4> | Zihan (Catalogue read projection + Frontend) |
     | <#E0E0E0> | Infrastructure |
     ——
     **Solid arrows** = async domain events via message broker
@@ -169,11 +206,6 @@ legend bottom left
     • **Anti-Corruption Layer** — each context maps external
       entities to own Value Objects (no shared domain models)
     • **Conformist** — Notification accepts upstream schemas as-is
-    ——
-    **Open items for team:**
-    • Catalogue context needs an owner (Zihan? shared?)
-    • Catalogue is a read projection, not a full domain context
-    • Zihan (Frontend) has no bounded context assignment
 endlegend
 
 @enduml

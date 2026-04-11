@@ -1,0 +1,105 @@
+@startuml BidHub Runtime View 2 of 3 - Asynchronous Event Flows
+!theme plain
+skinparam componentFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+skinparam nodesep 45
+skinparam ranksep 80
+
+skinparam component {
+    BackgroundColor<<FunctionalMicroservice>>     #FFE0B2
+    BorderColor<<FunctionalMicroservice>>         #A80036
+    BackgroundColor<<InfrastructureMicroservice>> #E0E0E0
+    BorderColor<<InfrastructureMicroservice>>     #616161
+}
+skinparam queue {
+    BackgroundColor<<InfrastructureMicroservice>> #F8BBD0
+    BorderColor<<InfrastructureMicroservice>>     #AD1457
+}
+
+title **BidHub — Runtime View (2 / 3)**\n//Asynchronous event flows — AMQP via RabbitMQ only.//\nLEMMA Operation viewpoint, Fig. 3 Lakeside-Mutual style (Sorgalla et al., 2021).\nOwner: Mykola Vaskevych (22372199)
+
+' ============================================================
+' PRODUCERS (left)
+' ============================================================
+package "Producers" as Producers {
+    component "<<Functional Microservice>>\n**auction-service**" as AuctionP <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**admin-service**" as AdminP <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**user-service**" as UserP <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**payment-service**" as PaymentP <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**order-service**" as OrderP <<FunctionalMicroservice>>
+}
+
+' ============================================================
+' BROKER (center)
+' ============================================================
+queue "<<Infrastructure Microservice>>\n**RabbitMQ Broker**\ntopic exchange,\ndurable queues" as Broker <<InfrastructureMicroservice>>
+
+' ============================================================
+' CONSUMERS (right)
+' ============================================================
+package "Consumers" as Consumers {
+    component "<<Functional Microservice>>\n**catalog-service**\n(read projection)" as CatalogueC <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**notification-service**" as NotifC <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**auction-service**\n//(also consumer)//" as AuctionC <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**payment-service**\n//(also consumer)//" as PaymentC <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**order-service**\n//(also consumer)//" as OrderC <<FunctionalMicroservice>>
+}
+
+' ============================================================
+' PUBLISH SIDE (producers → broker) — coloured per producer.
+' All arrows are amqp (see title) — label shows only event names.
+' ============================================================
+AuctionP -[#FF6600,bold]-> Broker : "AuctionCreated, BidPlaced,\nAuctionSold, BuyNowExecuted,\nAuctionEnded, AuctionCancelled,\nAuctionCompleted"
+AdminP   -[#9C27B0,bold]-> Broker : "ListingRemovedByAdmin,\nCategoryCreated/Updated/Deleted,\nReportSubmitted, ReportResolved"
+UserP    -[#5D4037,bold]-> Broker : "UserRegistered,\nUserStatusChanged"
+PaymentP -[#00897B,bold]-> Broker : "PaymentDeducted, EscrowHeld,\nEscrowReleased, PaymentFailed"
+OrderP   -[#1565C0,bold]-> Broker : "OrderCreated, OrderCompleted,\nOrderCancelled"
+
+' ============================================================
+' CONSUME SIDE (broker → consumers) — coloured per producing context.
+' All arrows are amqp — label shows only the consumer handler's intent.
+' ============================================================
+Broker -[#FF6600]-> CatalogueC : "Auction* → update index"
+Broker -[#FF6600]-> NotifC     : "BidPlaced, AuctionSold,\nAuctionEnded → notify"
+Broker -[#FF6600]-> PaymentC   : "AuctionSold / BuyNow →\ndeduct + hold escrow"
+Broker -[#FF6600]-> OrderC     : "AuctionSold / BuyNow →\ncreate order"
+Broker -[#9C27B0]-> AuctionC   : "ListingRemovedByAdmin,\nCategory* → cache update"
+Broker -[#9C27B0]-> CatalogueC : "ListingRemovedByAdmin,\nCategory* → index update"
+Broker -[#00897B]-> AuctionC   : "PaymentFailed\n(SOLD → ENDED)"
+Broker -[#00897B]-> OrderC     : "PaymentFailed → cancel"
+Broker -[#1565C0]-> AuctionC   : "OrderCompleted\n(SOLD → COMPLETED)"
+Broker -[#5D4037]-> NotifC     : "UserRegistered →\nwelcome email"
+
+' ============================================================
+' LEGEND
+' ============================================================
+legend bottom left
+    **Asynchronous event flows — this diagram**
+    ————————————————————————
+    **Solid bold arrow** = amqp (async domain event via RabbitMQ)
+    **Colours** = producing bounded context:
+    | <#FF6600> | Auction (Mykola) |
+    | <#9C27B0> | Admin (Mykola) |
+    | <#5D4037> | Account (Xunze) |
+    | <#00897B> | Payment (Zitao) |
+    | <#1565C0> | Order (Zitao) |
+    ——
+    **Pattern:** Published Language — every event is
+    self-contained; consumers never call back. Preserves
+    service-specific independence (Sorgalla 2021 §Background).
+    ——
+    //The labelled //(also consumer)// entries on the right//
+    //are the same microservices as on the left — shown twice//
+    //only to separate publish and consume flows visually.//
+    ——
+    **This is 2 of 3 runtime views.** See also:
+    • `runtime_view_1_sync.puml` — HTTP request path
+    • `runtime_view_3_infra.puml` — Eureka + Config registration
+endlegend
+
+@enduml

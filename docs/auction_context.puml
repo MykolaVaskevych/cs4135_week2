@@ -92,6 +92,7 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
         +addAuction(auctionId : UUID) : void
         +removeAuction(auctionId : UUID) : void
         +isWatching(auctionId : UUID) : Boolean
+        +pruneClosed(auctionId : UUID) : void
     }
 
     ' ============================================================
@@ -192,8 +193,10 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
             -sellerId : UUID
             -title : String
             -description : String
+            -photos : List<String>
             -categoryId : UUID
             -startingPrice : Money
+            -reservePrice : Money
             -buyNowPrice : Money [0..1]
             -endTime : DateTime
             -occurredAt : DateTime
@@ -251,35 +254,41 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
     ' DOMAIN EVENTS — CONSUMED (from other contexts)
     ' ============================================================
     together {
-        class "<<Domain Event>>\nListingRemovedByAdmin\n//consumed from Admin//" as EvAdminRemove {
+        class "<<Domain Event>>\nListingRemovedByAdmin\n//consumed, owned by Admin//" as EvAdminRemove {
             -auctionId : UUID
             -adminId : UUID
             -reason : String
+            -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nOrderCompleted\n//consumed from Order//" as EvOrderDone {
+        class "<<Domain Event>>\nOrderCompleted\n//consumed, owned by Order//" as EvOrderDone {
             -orderId : UUID
             -auctionId : UUID
+            -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nPaymentFailed\n//consumed from Payment//" as EvPayFail {
+        class "<<Domain Event>>\nPaymentFailed\n//consumed, owned by Payment//" as EvPayFail {
             -auctionId : UUID
             -winnerId : UUID
             -reason : String
+            -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nCategoryCreated\n//consumed from Admin//" as EvCatCreated {
+        class "<<Domain Event>>\nCategoryCreated\n//consumed, owned by Admin//" as EvCatCreated {
             -categoryId : UUID
             -name : String
+            -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nCategoryUpdated\n//consumed from Admin//" as EvCatUpdated {
+        class "<<Domain Event>>\nCategoryUpdated\n//consumed, owned by Admin//" as EvCatUpdated {
             -categoryId : UUID
             -name : String
+            -occurredAt : DateTime
         }
 
-        class "<<Domain Event>>\nCategoryDeleted\n//consumed from Admin//" as EvCatDeleted {
+        class "<<Domain Event>>\nCategoryDeleted\n//consumed, owned by Admin//" as EvCatDeleted {
             -categoryId : UUID
+            -occurredAt : DateTime
         }
     }
 
@@ -287,8 +296,9 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
     ' RELATIONSHIPS
     ' ============================================================
 
-    ' Listing -- Auction (1:1, per Fig. 1)
-    Listing "1" -- "0..1" Auction : "has >"
+    ' Listing -- Auction (separate aggregates, 1:0..1 reference by ID).
+    ' Uses "referenced by" (not "has") to signal aggregate boundary.
+    Listing "1" -- "0..1" Auction : "referenced by >"
 
     ' Aggregate composition: Auction contains Bids
     Auction "1" *-- "0..*" Bid : contains >
@@ -397,6 +407,13 @@ note right of Auction
     **INV-A8:** Seller cannot bid on own auction.
     bidderId ≠ sellerId.
     //Enforced by: placeBid()//
+    //**sellerId is a denormalised copy of**//
+    //**Listing.sellerId**, captured at auction//
+    //creation and immutable thereafter. Lets//
+    //placeBid() enforce the rule without loading//
+    //the Listing aggregate (standard DDD trick//
+    //for invariants that would otherwise span//
+    //aggregate boundaries).//
 
     **INV-A9:** currentPrice always equals
     max(bid.amount) or startingPrice if no bids.
@@ -414,30 +431,46 @@ end note
 note right of AuctionStatus
     **State Transitions:**
     ————————————————
-    PENDING → ACTIVE (on creation)
-    ACTIVE → SOLD (close: bid ≥ reserve)
-    ACTIVE → ENDED (close: no qualifying bid)
-    ACTIVE → CANCELLED (seller, 0 bids)
-    ACTIVE → REMOVED (admin moderation)
-    SOLD → COMPLETED (settlement finished)
-    SOLD → ENDED (PaymentFailed, compensating)
+    PENDING → ACTIVE   (on creation, immediate)
+    ACTIVE  → SOLD     (close: highestBid ≥ reserve)
+    ACTIVE  → SOLD     (buyNow: buyer ≠ seller, price set)
+    ACTIVE  → ENDED    (close: no qualifying bid)
+    ACTIVE  → CANCELLED (seller cancels, 0 bids)
+    ACTIVE  → REMOVED  (admin moderation)
+    PENDING → REMOVED  (admin moderation, rare)
+    SOLD    → COMPLETED (settlement finished)
+    SOLD    → ENDED     (PaymentFailed — compensating)
 
-    Per Application Lifecycle (Section 3.2)
-    and existing UML (Fig. 1).
-    PENDING is transient: auctions transition
-    to ACTIVE immediately (US-AU01).
+    **Terminal states** (no outgoing transitions):
+    COMPLETED, ENDED, CANCELLED, REMOVED.
+    //ENDED is terminal only in the non-compensating//
+    //path; SOLD→ENDED is a compensating reversal,//
+    //after which the auction is settled as ENDED.//
+
+    PENDING is transient: auctions transition to
+    ACTIVE immediately (US-AU01). Per Application
+    Lifecycle (Section 3.2) and existing UML (Fig. 1).
 end note
 
 note right of Watchlist
     **Aggregate Invariants:**
     ————————————————
     **INV-W1:** Cannot watch same auction twice.
-    **INV-W2:** Only ACTIVE auctions watchable.
+    **INV-W2:** Only ACTIVE auctions may be **added**.
+    Closed auctions are pruned automatically:
+    Watchlist subscribes (in-process) to
+    AuctionSold, AuctionEnded, AuctionCancelled,
+    AuctionCompleted and removes the auctionId
+    from every watchlist that contains it via
+    pruneClosed(). This keeps INV-W2 truthful
+    without weakening it.
 
     **Design decision:** In Auction context
     (not Catalogue) because watchlist triggers
     auction-related notifications (outbid,
-    ending) per B9, B11, B12 in README.
+    ending) per B9, B11, B12 in README, and
+    the in-process prune handler is cheaper
+    than a cross-context projection.
 end note
 
 note bottom of ClosingService
@@ -453,6 +486,16 @@ note bottom of BidValService
     Maps User → BidderRef value object.
     Auction context never imports
     Account's internal domain model.
+
+    **Freshness policy:** live REST call
+    **per bid attempt**, no local BidderRef
+    cache. Trades a few ms of latency per
+    bid for guaranteed freshness of INV-A7
+    (banned/suspended bidders). Acceptable
+    per NF13 (bid path latency budget).
+    Admin suspends/bans are therefore
+    instant-effective without needing an
+    event subscription to UserStatusChanged.
 end note
 
 note bottom of EvAdminRemove
@@ -504,12 +547,19 @@ note right of Bid
 end note
 
 note bottom of EvCreated
-    AuctionCreated carries listing details
-    (title, desc, categoryId) so that
-    **Catalogue context** (read projection)
-    can index it for search/filtering
-    without calling back to Auction.
+    AuctionCreated is a **self-contained**
+    Published Language event: it carries
+    every field the Catalogue read projection
+    needs (title, description, photos,
+    categoryId, startingPrice, reservePrice,
+    buyNowPrice, endTime) so consumers
+    never have to call back to Auction.
     See FR-C01, FR-C02.
+
+    //Per Sorgalla 2021 §Background — MSA//
+    //service-specific independence requires//
+    //events to be consumer-complete to//
+    //preserve loose coupling.//
 end note
 
 ' ============================================================

@@ -1,0 +1,91 @@
+@startuml BidHub Runtime View 1 of 3 - Synchronous Request Path
+!theme plain
+skinparam componentFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype polyline
+skinparam packageStyle rectangle
+
+skinparam component {
+    BackgroundColor<<FunctionalMicroservice>>     #FFE0B2
+    BorderColor<<FunctionalMicroservice>>         #A80036
+    BackgroundColor<<InfrastructureMicroservice>> #E0E0E0
+    BorderColor<<InfrastructureMicroservice>>     #616161
+    BackgroundColor<<MicroFrontend>>              #B3E5FC
+    BorderColor<<MicroFrontend>>                  #0277BD
+}
+
+title **BidHub — Runtime View (1 / 3)**\n//Synchronous request path — HTTP / REST only.//\nLEMMA Operation viewpoint, Fig. 3 Lakeside-Mutual style (Sorgalla et al., 2021).\nOwner: Mykola Vaskevych (22372199)
+
+' ============================================================
+' CLIENT
+' ============================================================
+component "<<Micro-Frontend>>\n**BidHub Web SPA**" as SPA <<MicroFrontend>>
+
+' ============================================================
+' EDGE
+' ============================================================
+component "<<Infrastructure Microservice>>\n**API Gateway**\n(Spring Cloud Gateway)\n:8080" as Gateway <<InfrastructureMicroservice>>
+
+' ============================================================
+' FUNCTIONAL MICROSERVICES
+' ============================================================
+package "Functional Plane" as Functional {
+    component "<<Functional Microservice>>\n**user-service**\nAccount ctx\n:8081" as User <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**catalog-service**\nCatalogue read-projection\n:8082" as Catalogue <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**auction-service**\nAuction ctx\n:8083" as Auction <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**order-service**\nOrder ctx\n:8084" as Order <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**payment-service**\nPayment ctx\n:8085" as Payment <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**admin-service**\nAdmin ctx\n:8087" as Admin <<FunctionalMicroservice>>
+}
+
+' ============================================================
+' EDGE: client → gateway
+' ============================================================
+SPA ..> Gateway : "**http**"
+
+' ============================================================
+' GATEWAY → FUNCTIONAL SERVICES (load-balanced via Eureka)
+' ============================================================
+Gateway ..> User      : "**http**\nlb://user-service"
+Gateway ..> Catalogue : "**http**\nlb://catalog-service"
+Gateway ..> Auction   : "**http**\nlb://auction-service"
+Gateway ..> Order     : "**http**\nlb://order-service"
+Gateway ..> Payment   : "**http**\nlb://payment-service"
+Gateway ..> Admin     : "**http**\nlb://admin-service"
+
+' ============================================================
+' CROSS-SERVICE REST — Customer-Supplier ACL links from context map
+' ============================================================
+Auction --> User      : "**http**\nvalidate bidder\n(ACL: BidderRef)"
+Admin   --> User      : "**http**\nsearch / suspend / ban\n(ACL: UserSnapshot)"
+Admin   --> Auction   : "**http**\nread auction details\n(ACL: ListingSnapshot)"
+Admin   --> Catalogue : "**http**\nactive-listing count\nfor INV-2 deactivation check"
+Gateway --> User      : "**http**\nJWT validate\n(ACL: TokenValidationResult)"
+
+' ============================================================
+' LEGEND
+' ============================================================
+legend bottom right
+    **Synchronous path — this diagram**
+    —————————————————————
+    | Shape | LEMMA Stereotype |
+    | <#B3E5FC> | «Micro-Frontend» |
+    | <#FFE0B2> | «Functional Microservice» |
+    | <#E0E0E0> | «Infrastructure Microservice» |
+    ——
+    **Dashed arrow** = http (gateway routing, client edge)
+    **Solid arrow**  = http (cross-service REST / ACL)
+    ——
+    **This is 1 of 3 runtime views.** See also:
+    • `runtime_view_2_async.puml` — AMQP / event flows
+    • `runtime_view_3_infra.puml` — Eureka + Config registration
+    ——
+    //Per Sorgalla, Wizenty, Rademacher, Sachweh & Zündorf,//
+    //2021, SN Comp. Sci. 2:459, §§ LEMMA-Based Workflow,//
+    //Visualization of Microservice Architecture Models, Fig. 3.//
+endlegend
+
+@enduml
