@@ -152,19 +152,21 @@ BidHub is a CS4135 Software Architecture group project demonstrating full-stack 
 ## Repository Structure
 
 ```
-cs4135_week2/          # Parent repo
-├── frontend/          # Submodule -> cs4135_week2_frontend
-├── backend/           # Submodule -> cs4135_week2_backend
-├── lefthook.yml       # Git hooks config
-└── .github/workflows/ # Integration CI
+cs4135_BidHub/               # Parent repo (this)
+├── frontend/                # Submodule -> cs4135_BidHub_frontend
+├── backend/                 # Submodule -> cs4135_BidHub_backend
+├── lefthook.yml             # Git hooks config
+└── .github/workflows/       # Integration CI
 ```
 
 ## Branch Strategy
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production - protected, requires PR |
-| `development` | Default branch for development |
+| `main` | **Deploy branch.** Submodule pointers are pinned to exact commits of `backend/main` and `frontend/main`. Railway deploys from here. |
+| `development` | Day-to-day work. Pushing here never touches production. |
+
+`backend/main` and `frontend/main` are fast-forwarded from their `development` branches when ready to ship. Root `main` is then updated to pin the new SHAs.
 
 ## Cloning the Project
 
@@ -178,21 +180,34 @@ git submodule update --init --recursive
 
 ## Running the Project
 
-### Frontend (React + Vite)
+### Full stack (Docker)
+
+```bash
+cd backend
+docker compose up --build
+# All 10 services + Postgres. First build takes ~5 min.
+# API gateway: http://localhost:8080
+# Eureka dashboard: http://localhost:8761
+```
+
+### Frontend only (dev mode)
 
 ```bash
 cd frontend
 npm install
 npm run dev
-# Runs on http://localhost:5173
+# http://localhost:5173 — expects backend running on :8080
 ```
 
-### Backend (Spring Boot)
+### Backend services individually
 
 ```bash
 cd backend
-./mvnw spring-boot:run
-# Runs on http://localhost:8080
+# Start infra first
+./mvnw -pl eureka-server spring-boot:run &
+./mvnw -pl config-server spring-boot:run &
+# Then any service
+./mvnw -pl account-service spring-boot:run
 ```
 
 ## Pre-commit Hooks
@@ -233,9 +248,21 @@ git push origin development
 
 ## Deployment
 
-Create a PR from `development` to `main`. CI must pass before merge.
+Railway project: https://railway.com/project/b4e59d4d-ca8e-44a0-a7ec-d0c8f7a08a87
+
+Full deploy workflow and Railway env var reference: [`backend/docs/DEPLOY.md`](backend/docs/DEPLOY.md).
+
+Quick redeploy (from repo root):
 
 ```bash
-# Or via CLI
-gh pr create --base main --head development
+# 1. Fast-forward backend/main
+cd backend && git checkout main && git merge --ff-only origin/development && git push origin main && git checkout development && cd ..
+
+# 2. Pin in root/main
+git checkout main && git submodule update --remote --merge && git add backend && git commit -m "pin backend@$(git -C backend rev-parse --short HEAD)" && git push origin main && git checkout development
+
+# 3. Redeploy changed services
+for svc in account-service auction-service admin-service; do
+  railway up --service "$svc" --detach --path-as-root backend/
+done
 ```
