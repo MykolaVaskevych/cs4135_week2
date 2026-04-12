@@ -14,7 +14,7 @@ skinparam class {
     ArrowColor #A80036
 }
 
-title **BidHub — Auction Bounded Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\nOwner: Mykola Vaskevych (22372199)
+title **BidHub — Auction Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Mykola Vaskevych (22372199)
 
 package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
 
@@ -297,8 +297,9 @@ package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
     ' ============================================================
 
     ' Listing -- Auction (separate aggregates, 1:0..1 reference by ID).
-    ' Uses "referenced by" (not "has") to signal aggregate boundary.
-    Listing "1" -- "0..1" Auction : "referenced by >"
+    ' Dashed dependency (not solid association) to signal aggregate
+    ' boundary: Auction references Listing by listingId, not by object.
+    Listing "1" <.. "0..1" Auction : "referenced by ID >"
 
     ' Aggregate composition: Auction contains Bids
     Auction "1" *-- "0..*" Bid : contains >

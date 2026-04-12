@@ -14,7 +14,7 @@ skinparam class {
     ArrowColor #A80036
 }
 
-title **BidHub — Admin Bounded Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\nOwner: Mykola Vaskevych (22372199)
+title **BidHub — Admin Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Mykola Vaskevych (22372199)
 
 ' ============================================================
 ' BOUNDED CONTEXT
@@ -290,12 +290,12 @@ package "<<BoundedContext>>\nAdmin Context" as AdminBC #F5F5F5 {
 note right of Category
     **Aggregate Invariants:**
     ————————————————
-    **INV-1:** Category name must be unique
+    **INV-CAT1:** Category name must be unique
     among siblings (same parent level).
     //Enforced by: CategoryManagementService//
     //checks findByName() before create.//
 
-    **INV-2:** Cannot **deactivate** a category
+    **INV-CAT2:** Cannot **deactivate** a category
     while active listings reference it.
     //Enforced by: CategoryManagementService//
     //issues a cross-context count query to//
@@ -304,14 +304,14 @@ note right of Category
     //count of active listings per categoryId.//
     //See FR-AD05. Customer-Supplier pattern.//
 
-    **INV-3:** Only **soft-delete**. `deactivate()`
+    **INV-CAT3:** Only **soft-delete**. `deactivate()`
     flips `isActive` and publishes
     **CategoryDeleted**. No hard-delete path
     exists (CategoryRepository has no delete
     method). Preserves audit trail per NF8
     and keeps downstream caches consistent.
 
-    **INV-4:** parentCategory must reference
+    **INV-CAT4:** parentCategory must reference
     an existing, active category or be null.
     //Prevents orphaned subcategories.//
 end note
@@ -319,16 +319,16 @@ end note
 note right of UserReport
     **Aggregate Invariants:**
     ————————————————
-    **INV-4:** Status transitions are one-way:
+    **INV-REP1:** Status transitions are one-way:
     PENDING → RESOLVED
     PENDING → DISMISSED
     //Throws exception if status ≠ PENDING.//
 
-    **INV-5:** On transition from PENDING,
+    **INV-REP2:** On transition from PENDING,
     resolvedByAdminId, resolvedAt, and
     resolutionNote must ALL be set.
 
-    **INV-6:** Reports created by regular users
+    **INV-REP3:** Reports created by regular users
     via submit() factory. Only admins resolve.
     //See US-AD05 acceptance criteria.//
 end note
@@ -336,20 +336,20 @@ end note
 note right of ModAction
     **Aggregate Invariants:**
     ————————————————
-    **INV-7:** adminId, reason, performedAt
+    **INV-MOD1:** adminId, reason, performedAt
     are REQUIRED (non-nullable).
     //Satisfies NF8: "All moderation actions//
     //shall be persisted in an audit log."//
     //See FR-AD08.//
 
-    **INV-8:** ModerationAction is **append-only**.
+    **INV-MOD2:** ModerationAction is **append-only**.
     No update or delete operations exist.
     //Repository has no delete method.//
     //Entity has no setters.//
 end note
 
 note bottom of CatService
-    **Cross-Context Dependency (INV-2):**
+    **Cross-Context Dependency (INV-CAT2):**
     `deactivateCategory()` issues a count query
     to the **Catalogue context** (owner: Zihan)
     via REST to check for active listings
@@ -420,6 +420,6 @@ package "<<BoundedContext>>\nCatalogue Context (external)" as CatExt #E8E8E8 {
 
 AdminBC .[#0277BD,dashed].> AccountExt : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
 AdminBC .[#0277BD,dashed].> AuctionExt : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
-AdminBC .[#0277BD,dashed].> CatExt : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion (INV-2)"
+AdminBC .[#0277BD,dashed].> CatExt : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion (INV-CAT2)"
 
 @enduml

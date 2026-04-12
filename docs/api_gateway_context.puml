@@ -14,7 +14,7 @@ skinparam class {
     ArrowColor #A80036
 }
 
-title **BidHub — API Gateway Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\nOwner: Xunze Tan (24247472)
+title **BidHub — API Gateway Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\n//Infrastructure context — DDD patterns used analogically; route definitions are static YAML, not persisted.//\nOwner: Xunze Tan (24247472)
 
 ' ============================================================
 ' BOUNDED CONTEXT

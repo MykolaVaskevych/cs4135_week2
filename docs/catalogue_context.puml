@@ -14,7 +14,7 @@ skinparam class {
     ArrowColor #A80036
 }
 
-title **BidHub — Catalogue Bounded Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\n//Read projection — indexes Auction + Admin for search, filtering, and\ncategory active-listing counts. No domain events published; no write REST.//\nOwner: Zihan
+title **BidHub — Catalogue Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\n//Read projection — indexes Auction + Admin for search, filtering, and\ncategory active-listing counts. No domain events published; no write REST.//\nOwner: Zihan Zhuo (24247456)
 
 ' ============================================================
 ' BOUNDED CONTEXT
@@ -420,10 +420,10 @@ note bottom of SearchService
     • `GET /api/catalogue/categories/{id}/listings`
       → all listings in a category (paged).
     • `GET /api/catalogue/categories/{id}/active-count`
-      → **cross-context query source for Admin INV-2**.
+      → **cross-context query source for Admin INV-CAT2**.
         Admin's `CategoryManagementService.deactivateCategory()`
         calls this before flipping `isActive = false`. See
-        `admin_context.puml` INV-2 and `context_map.puml`.
+        `admin_context.puml` INV-CAT2 and `context_map.puml`.
 
     **No write endpoints exist.** Category creation and
     listing creation live in Admin and Auction respectively.
@@ -443,14 +443,14 @@ AuctionExt -[#FF6600,dashed]-> CatalogueBC : "**Events** (async via broker):\nAu
 
 AdminExt   -[#9C27B0,dashed]-> CatalogueBC : "**Events** (async via broker):\nListingRemovedByAdmin,\nCategoryCreated, CategoryUpdated,\nCategoryDeleted"
 
-' --- synchronous inbound REST (Admin → Catalogue for INV-2) ---
-AdminExt   .[#0277BD,dashed].> CatalogueBC : "<<Customer-Supplier>>\nREST: GET active-listing count\nfor category deactivation (INV-2).\nAdmin is downstream customer;\nCatalogue is upstream supplier."
+' --- synchronous inbound REST (Admin → Catalogue for Admin INV-CAT2) ---
+AdminExt   .[#0277BD,dashed].> CatalogueBC : "<<Customer-Supplier>>\nREST: GET active-listing count\nfor category deactivation (Admin INV-CAT2).\nAdmin is downstream customer;\nCatalogue is upstream supplier."
 
 note bottom of CatalogueBC
     **Catalogue is a read projection** —
     no domain events published, no write REST accepted.
     Outputs: query REST endpoints consumed by the
-    frontend and by Admin (for INV-2).
+    frontend and by Admin (for Admin INV-CAT2).
 
     //Per context map (Sorgalla et al. 2021,//
     //§Background — MSA service-specific independence;//

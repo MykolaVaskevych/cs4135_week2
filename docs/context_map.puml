@@ -104,7 +104,7 @@ AuctionCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: valida
 
 AdminCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
 
-AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deactivation (INV-2)"
+AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deactivation (Admin INV-CAT2)"
 
 AdminCtx .[#0277BD,dashed].> AuctionCtx : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
 

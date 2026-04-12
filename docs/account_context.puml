@@ -14,7 +14,7 @@ skinparam class {
     ArrowColor #A80036
 }
 
-title **BidHub — Account Bounded Context**\nDDD Tactical Design (UML Profile per Rademacher et al.)\nOwner: Xunze Tan (24247472)
+title **BidHub — Account Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Xunze Tan (24247472)
 
 ' ============================================================
 ' BOUNDED CONTEXT
@@ -148,9 +148,6 @@ package "<<BoundedContext>>\nAccount Context" as AccountBC #F5F5F5 {
 
     ' Aggregate composition: User contains ShippingAddresses
     User "1" *-- "0..*" Address : has >
-
-    ' Value Object usage
-    User "1" -- "0..*" AuthToken : authenticated via >
 
     ' Enum usage
     User --> UserRole : role

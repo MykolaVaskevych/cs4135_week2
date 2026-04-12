@@ -62,7 +62,7 @@ Gateway ..> Admin     : "**http**\nlb://admin-service"
 Auction --> User      : "**http**\nvalidate bidder\n(ACL: BidderRef)"
 Admin   --> User      : "**http**\nsearch / suspend / ban\n(ACL: UserSnapshot)"
 Admin   --> Auction   : "**http**\nread auction details\n(ACL: ListingSnapshot)"
-Admin   --> Catalogue : "**http**\nactive-listing count\nfor INV-2 deactivation check"
+Admin   --> Catalogue : "**http**\nactive-listing count\nfor INV-CAT2 deactivation check"
 Gateway --> User      : "**http**\nJWT validate\n(ACL: TokenValidationResult)"
 
 ' ============================================================
