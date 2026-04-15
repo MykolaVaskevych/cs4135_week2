@@ -1,0 +1,425 @@
+@startuml Admin Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Admin Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Mykola Vaskevych (22372199)
+
+' ============================================================
+' BOUNDED CONTEXT
+' ============================================================
+package "<<BoundedContext>>\nAdmin Context" as AdminBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE 1: Category
+    ' Independent lifecycle. Supports hierarchical categories
+    ' via parentCategory self-reference (per existing UML Fig. 1).
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nCategory" as Category {
+        <<DefinesIdentity>> -categoryId : UUID
+        -name : String
+        -description : String
+        -parentCategory : Category [0..1]
+        -isActive : Boolean
+        -createdAt : DateTime
+        -updatedAt : DateTime
+        __
+        +rename(name : String, description : String) : void
+        +activate() : void
+        +deactivate() : void
+        +assignParent(parent : Category) : void
+        +removeParent() : void
+    }
+
+    ' ============================================================
+    ' AGGREGATE 2: UserReport
+    ' Independent lifecycle. Submitted by regular users via
+    ' API Gateway. Resolved or dismissed by admins.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nUserReport" as UserReport {
+        <<DefinesIdentity>> -reportId : UUID
+        -reporterId : UUID
+        -targetType : ModerationTargetType
+        -targetId : UUID
+        -reason : String
+        -status : ReportStatus
+        -createdAt : DateTime
+        -resolvedAt : DateTime [0..1]
+        -resolvedByAdminId : UUID [0..1]
+        -resolutionNote : String [0..1]
+        __
+        +resolve(adminId : UUID, note : String) : void
+        +dismiss(adminId : UUID, note : String) : void
+        .. factory ..
+        {static} +submit(reporterId : UUID,\n  targetType : ModerationTargetType,\n  targetId : UUID,\n  reason : String) : UserReport
+    }
+
+    ' ============================================================
+    ' AGGREGATE 3: ModerationAction (audit log)
+    ' Append-only. Satisfies NF8 and FR-AD08.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nModerationAction" as ModAction {
+        <<DefinesIdentity>> -actionId : UUID
+        -adminId : UUID
+        -targetType : ModerationTargetType
+        -targetId : UUID
+        -actionType : ActionType
+        -reason : String
+        -performedAt : DateTime
+        -relatedReportId : UUID [0..1]
+    }
+
+    ' ============================================================
+    ' VALUE OBJECTS (ACL representations)
+    ' ============================================================
+    class "<<Value Object>>\nAdminDashboardSummary" as AdminSummary {
+        -totalUsers : Integer
+        -activeAuctions : Integer
+        -completedSales : Integer
+        -pendingReports : Integer
+        __
+        Computed read model (not persisted).
+        Aggregated from cross-context queries.
+        See US-AD01: "Dashboard displays
+        summary of pending tasks."
+    }
+
+    class "<<Value Object>>\nUserSnapshot" as UserSnapshot {
+        -userId : UUID
+        -email : String
+        -displayName : String
+        -role : String
+        -status : String
+        -registeredAt : DateTime
+        __
+        ACL mapping of Account's User.
+        See US-AD02: "Admin can see paginated
+        user list... search by email or username."
+    }
+
+    class "<<Value Object>>\nListingSnapshot" as ListingSnapshot {
+        -auctionId : UUID
+        -listingId : UUID
+        -title : String
+        -sellerId : UUID
+        -status : String
+        -currentPrice : BigDecimal
+        -reportCount : Integer
+        __
+        ACL mapping of Auction (and, once assigned,
+        Catalogue) data. See US-AD05: "Admin can view
+        a queue of reports" and US-AD06: "remove
+        auction listings."
+
+        **reportCount source:** in-context query —
+        UserReportRepository.countByStatus+targetId
+        against Admin's own UserReport aggregate
+        (targetType = LISTING, targetId = auctionId).
+        Not an ACL call — Admin owns the reports.
+    }
+
+    ' ============================================================
+    ' ENUMERATIONS
+    ' ============================================================
+    enum "<<Enumeration>>\nActionType" as ActionType {
+        WARN
+        SUSPEND
+        BAN
+        UNBAN
+        REMOVE_LISTING
+    }
+
+    enum "<<Enumeration>>\nReportStatus" as ReportStatus {
+        PENDING
+        RESOLVED
+        DISMISSED
+    }
+
+    enum "<<Enumeration>>\nModerationTargetType" as ModerationTargetType {
+        USER
+        LISTING
+    }
+
+    ' ============================================================
+    ' REPOSITORIES (one per aggregate root)
+    ' ============================================================
+    class "<<Repository>>\nCategoryRepository" as CategoryRepo {
+        +findById(categoryId : UUID) : Category
+        +findAll() : List<Category>
+        +findActive() : List<Category>
+        +findByName(name : String) : Category [0..1]
+        +findByParentId(parentId : UUID) : List<Category>
+        +save(category : Category) : Category
+    }
+
+    class "<<Repository>>\nUserReportRepository" as ReportRepo {
+        +findById(reportId : UUID) : UserReport
+        +findByStatus(status : ReportStatus) : List<UserReport>
+        +findByTargetId(targetId : UUID) : List<UserReport>
+        +countByStatus(status : ReportStatus) : Long
+        +countByTargetId(targetId : UUID) : Long
+        +save(report : UserReport) : UserReport
+    }
+
+    class "<<Repository>>\nModerationActionRepository" as ModActionRepo {
+        +findByAdminId(adminId : UUID) : List<ModerationAction>
+        +findByTargetId(targetId : UUID) : List<ModerationAction>
+        +findAll() : List<ModerationAction>
+        +save(action : ModerationAction) : ModerationAction
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICES
+    ' ============================================================
+    class "<<Service>>\nContentModerationService" as ModService {
+        +removeAuctionListing(auctionId : UUID,\n  adminId : UUID, reason : String) : void
+        +moderateUser(userId : UUID, adminId : UUID,\n  action : ActionType, reason : String) : void
+        +resolveReport(reportId : UUID,\n  adminId : UUID, note : String) : void
+    }
+
+    class "<<Service>>\nCategoryManagementService" as CatService {
+        +createCategory(name : String,\n  description : String,\n  parentId : UUID [0..1]) : Category
+        +updateCategory(categoryId : UUID,\n  name : String, description : String) : void
+        +deactivateCategory(categoryId : UUID) : void
+    }
+
+    class "<<Service>>\nAdminDashboardService" as DashService {
+        +getSummary() : AdminDashboardSummary
+        +searchUsers(query : String, page : Integer) : List<UserSnapshot>
+        +getListingDetails(auctionId : UUID) : ListingSnapshot
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — PUBLISHED
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nListingRemovedByAdmin" as EvListingRemoved {
+            -auctionId : UUID
+            -adminId : UUID
+            -reason : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryCreated" as EvCatCreated {
+            -categoryId : UUID
+            -name : String
+            -description : String
+            -parentCategoryId : UUID [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryDeleted" as EvCatDeleted {
+            -categoryId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryUpdated" as EvCatUpdated {
+            -categoryId : UUID
+            -name : String
+            -description : String
+            -parentCategoryId : UUID [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nReportResolved" as EvReportResolved {
+            -reportId : UUID
+            -adminId : UUID
+            -resolutionNote : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nReportSubmitted" as EvReportSubmitted {
+            -reportId : UUID
+            -reporterId : UUID
+            -targetType : ModerationTargetType
+            -targetId : UUID
+            -reason : String
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+
+    ' Category self-reference (hierarchy)
+    Category "0..1" <-- "0..*" Category : parentCategory
+
+    ' Enum usage
+    UserReport --> ReportStatus : status
+    UserReport --> ModerationTargetType : targetType
+    ModAction --> ActionType : actionType
+    ModAction --> ModerationTargetType : targetType
+
+    ' Repositories
+    CategoryRepo ..> Category : retrieves / persists
+    ReportRepo ..> UserReport : retrieves / persists
+    ModActionRepo ..> ModAction : retrieves / persists
+
+    ' Domain Services
+    ModService ..> ModActionRepo : creates audit log
+    ModService ..> ReportRepo : resolves reports
+    CatService ..> CategoryRepo : manages categories
+    DashService ..> UserSnapshot : returns via ACL
+    DashService ..> ListingSnapshot : returns via ACL
+    DashService ..> AdminSummary : computes
+
+    ' Event publishing
+    ModService ..> EvListingRemoved : publishes
+    ModService ..> EvReportResolved : publishes
+    CatService ..> EvCatCreated : publishes
+    CatService ..> EvCatUpdated : publishes
+    CatService ..> EvCatDeleted : publishes
+    UserReport ..> EvReportSubmitted : publishes on creation
+}
+
+' ============================================================
+' INVARIANTS
+' ============================================================
+note right of Category
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-CAT1:** Category name must be unique
+    among siblings (same parent level).
+    //Enforced by: CategoryManagementService//
+    //checks findByName() before create.//
+
+    **INV-CAT2:** Cannot **deactivate** a category
+    while active listings reference it.
+    //Enforced by: CategoryManagementService//
+    //issues a cross-context count query to//
+    //**Catalogue REST** (owner: Zihan) — the//
+    //Catalogue read projection has an indexed//
+    //count of active listings per categoryId.//
+    //See FR-AD05. Customer-Supplier pattern.//
+
+    **INV-CAT3:** Only **soft-delete**. `deactivate()`
+    flips `isActive` and publishes
+    **CategoryDeleted**. No hard-delete path
+    exists (CategoryRepository has no delete
+    method). Preserves audit trail per NF8
+    and keeps downstream caches consistent.
+
+    **INV-CAT4:** parentCategory must reference
+    an existing, active category or be null.
+    //Prevents orphaned subcategories.//
+end note
+
+note right of UserReport
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-REP1:** Status transitions are one-way:
+    PENDING → RESOLVED
+    PENDING → DISMISSED
+    //Throws exception if status ≠ PENDING.//
+
+    **INV-REP2:** On transition from PENDING,
+    resolvedByAdminId, resolvedAt, and
+    resolutionNote must ALL be set.
+
+    **INV-REP3:** Reports created by regular users
+    via submit() factory. Only admins resolve.
+    //See US-AD05 acceptance criteria.//
+end note
+
+note right of ModAction
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-MOD1:** adminId, reason, performedAt
+    are REQUIRED (non-nullable).
+    //Satisfies NF8: "All moderation actions//
+    //shall be persisted in an audit log."//
+    //See FR-AD08.//
+
+    **INV-MOD2:** ModerationAction is **append-only**.
+    No update or delete operations exist.
+    //Repository has no delete method.//
+    //Entity has no setters.//
+end note
+
+note bottom of CatService
+    **Cross-Context Dependency (INV-CAT2):**
+    `deactivateCategory()` issues a count query
+    to the **Catalogue context** (owner: Zihan)
+    via REST to check for active listings
+    referencing the categoryId. Customer-Supplier
+    pattern. Admin does NOT query listing data
+    from its own database.
+
+    `deactivateCategory()` then calls
+    `Category.deactivate()` and publishes
+    **CategoryDeleted**. **No hard-delete path** —
+    repository has no delete method
+    (audit-trail preservation, NF8).
+
+    `createCategory()` accepts optional `parentId`
+    for subcategory hierarchy.
+end note
+
+note bottom of DashService
+    **Anti-Corruption Layer (ACL):**
+    Fetches user data from Account, listing
+    data from Auction, and category-aggregated
+    data from Catalogue via REST. Maps to
+    internal UserSnapshot and ListingSnapshot
+    Value Objects. Admin never imports
+    external domain models directly.
+
+    **Freshness policy:** live REST call **per
+    admin request** — no local cache of
+    UserSnapshot / ListingSnapshot. The admin
+    dashboard is low-traffic and always wants
+    the freshest view (suspended users,
+    current prices). Admin therefore does
+    NOT need to consume UserStatusChanged
+    or auction status events to keep caches
+    in sync — there is no cache to sync.
+
+    getSummary() aggregates counts from
+    multiple context APIs.
+end note
+
+note bottom of ModService
+    **Side effects of moderation:**
+    removeAuctionListing():
+    1. Creates ModerationAction (audit)
+    2. Publishes ListingRemovedByAdmin
+    → Auction ctx transitions to REMOVED
+    → Catalogue ctx deactivates listing
+
+    moderateUser():
+    1. Calls Account context REST API
+       to suspend/ban user (Customer-Supplier)
+    2. Account publishes UserStatusChanged
+    3. Creates ModerationAction (audit)
+    See US-AD03, US-AD06.
+end note
+
+' ============================================================
+' EXTERNAL CONTEXT REFERENCES
+' ============================================================
+package "<<BoundedContext>>\nAccount Context (external)" as AccountExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nAuction Context (external)" as AuctionExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nCatalogue Context (external)" as CatExt #E8E8E8 {
+}
+
+AdminBC .[#0277BD,dashed].> AccountExt : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
+AdminBC .[#0277BD,dashed].> AuctionExt : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
+AdminBC .[#0277BD,dashed].> CatExt : "<<Customer-Supplier>>\nREST: check active listings\nfor category deletion (INV-CAT2)"
+
+@enduml

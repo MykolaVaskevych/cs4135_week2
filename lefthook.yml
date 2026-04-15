@@ -2,8 +2,12 @@ post-checkout:
   commands:
     update-submodules:
       run: git submodule update --init --recursive
+    checkout-branches:
+      run: git submodule foreach git checkout development
 
 post-merge:
   commands:
     update-submodules:
       run: git submodule update --init --recursive
+    checkout-branches:
+      run: git submodule foreach git checkout development

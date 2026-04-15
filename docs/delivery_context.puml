@@ -1,0 +1,195 @@
+@startuml Delivery Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Delivery/Escrow Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Oliver Fitzgerald (22365958)
+
+package "<<BoundedContext>>\nDelivery/Escrow Context" as DeliveryBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE ROOT: DeliveryJob
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nDeliveryJob" as DeliveryJob {
+        <<DefinesIdentity>> -deliveryJobId : UUID
+        -orderId : UUID
+        -auctionId : UUID
+        -sellerId : UUID
+        -buyerId : UUID
+        -driverId : UUID [0..1]
+        -status : DeliveryStatus
+        -pickupAddress : Address
+        -deliveryAddress : Address
+        -escrowRef : EscrowReference
+        -createdAt : DateTime
+        -updatedAt : DateTime
+        __
+        +assignDriver(driverId : UUID) : void
+        +confirmCollection(sellerId : UUID) : void
+        +markDelivered(driverId : UUID) : void
+        +confirmDelivery(buyerId : UUID) : void
+        +raiseDispute(reporterId : UUID, reason : String) : void
+        +cancel() : void
+    }
+
+    ' ============================================================
+    ' VALUE OBJECT: Address
+    ' ============================================================
+    class "<<Value Object>>\nAddress" as Address {
+        -street : String
+        -city : String
+        -county : String
+        -eircode : String
+        __
+        +equals(other : Address) : Boolean
+    }
+
+    ' ============================================================
+    ' VALUE OBJECT: EscrowReference
+    ' Cross-context reference by ID to Payment context
+    ' ============================================================
+    class "<<Value Object>>\nEscrowReference" as EscrowReference {
+        -escrowId : UUID
+        -amount : BigDecimal
+        -currency : String
+        -escrowStatus : EscrowStatus
+        __
+        +isHeld() : Boolean
+        +isReleased() : Boolean
+    }
+
+    ' ============================================================
+    ' ENUM: DeliveryStatus
+    ' ============================================================
+    enum "<<Enumeration>>\nDeliveryStatus" as DeliveryStatus {
+        PENDING
+        ASSIGNED
+        COLLECTING
+        IN_TRANSIT
+        DELIVERED
+        CONFIRMED
+        DISPUTED
+        CANCELLED
+    }
+
+    ' ============================================================
+    ' ENUM: EscrowStatus
+    ' ============================================================
+    enum "<<Enumeration>>\nEscrowStatus" as EscrowStatus {
+        HELD
+        RELEASED
+        DISPUTED
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS
+    ' ============================================================
+    class "<<Domain Event>>\nDeliveryJobCreated" as DeliveryJobCreated {
+        +deliveryJobId : UUID
+        +orderId : UUID
+        +sellerId : UUID
+        +buyerId : UUID
+        +occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nGoodsCollected" as GoodsCollected {
+        +deliveryJobId : UUID
+        +sellerId : UUID
+        +occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nGoodsDelivered" as GoodsDelivered {
+        +deliveryJobId : UUID
+        +driverId : UUID
+        +occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nDeliveryConfirmed" as DeliveryConfirmed {
+        +deliveryJobId : UUID
+        +orderId : UUID
+        +buyerId : UUID
+        +occurredAt : DateTime
+    }
+
+    class "<<Domain Event>>\nDeliveryDisputed" as DeliveryDisputed {
+        +deliveryJobId : UUID
+        +reporterId : UUID
+        +reason : String
+        +occurredAt : DateTime
+    }
+
+    ' ============================================================
+    ' REPOSITORY
+    ' ============================================================
+    interface "<<Repository>>\nDeliveryJobRepository" as DeliveryJobRepository {
+        +findById(id : UUID) : Optional<DeliveryJob>
+        +findByOrderId(orderId : UUID) : Optional<DeliveryJob>
+        +findByDriverId(driverId : UUID) : List<DeliveryJob>
+        +save(job : DeliveryJob) : DeliveryJob
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICE
+    ' ============================================================
+    class "<<Domain Service>>\nDeliveryEscrowService" as DeliveryEscrowService {
+        +createJob(orderId, sellerId, buyerId, escrowRef) : DeliveryJob
+        +releaseEscrow(deliveryJobId) : void
+        +holdDispute(deliveryJobId) : void
+    }
+
+    ' ============================================================
+    ' INVARIANT NOTES
+    ' ============================================================
+    note top of DeliveryJob
+        **Invariants:**
+        INV-D1: job requires valid orderId at creation
+        INV-D2: driver must be assigned before collection
+        INV-D3: seller confirms collection → IN_TRANSIT (FR-DE02)
+        INV-D4: buyer confirms delivery → CONFIRMED → escrow released (FR-DE03/04)
+        INV-D5: CONFIRMED/DISPUTED are terminal states
+        INV-D6: dispute freezes escrow until admin resolves
+    end note
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+    DeliveryJob *-- Address : "pickupAddress\ndeliveryAddress"
+    DeliveryJob *-- EscrowReference : "escrowRef"
+    DeliveryJob --> DeliveryStatus
+    EscrowReference --> EscrowStatus
+    DeliveryJob ..> DeliveryJobCreated : "<<publishes>>"
+    DeliveryJob ..> GoodsCollected : "<<publishes>>"
+    DeliveryJob ..> GoodsDelivered : "<<publishes>>"
+    DeliveryJob ..> DeliveryConfirmed : "<<publishes>>"
+    DeliveryJob ..> DeliveryDisputed : "<<publishes>>"
+    DeliveryJobRepository ..> DeliveryJob : "<<manages>>"
+    DeliveryEscrowService ..> DeliveryJob : "<<uses>>"
+}
+
+note right of DeliveryBC
+    **Cross-Context Dependencies:**
+    Consumes (async via broker):
+    • OrderCreated → create DeliveryJob
+    • OrderCancelled → cancel DeliveryJob
+    Publishes (async via broker):
+    • DeliveryJobCreated → Payment, Order, Notification
+    • GoodsCollected → Order, Notification
+    • GoodsDelivered → Order, Notification
+    • DeliveryConfirmed → Payment (release escrow), Order, Notification
+    • DeliveryDisputed → Payment (hold escrow), Notification (alert admin)
+    EscrowReference is a cross-context Value Object
+    referencing Payment context by ID only (no shared model).
+end note
+
+@enduml

@@ -1,0 +1,105 @@
+Project setup:  Project setup and forming a project team, writing the application scenario and basic project requirements, creating a GitHub repository and a Wiki for collaborative work and documentation.
+
+Project Setup (Marking Scheme) – 5 Marks
+
+Criteria
+	
+
+Excellent (Full Marks)
+	
+
+Good 
+	
+
+Basic 
+	
+
+Poor (0 Marks)
+	
+
+Marks
+
+Team Formation & Organization
+	
+
+Team is fully formed, roles are clearly assigned, and communication channels are established.
+	
+
+Team formed with minor gaps in roles or organisation.
+	
+
+Team formed, but roles are unclear, or the communication setup is incomplete.
+	
+
+Team not clearly formed or no organisation evident.
+	
+
+1
+
+Application Scenario Description
+	
+
+The scenario is clear, detailed, well‑structured, and provides a strong context for the project.
+	
+
+The scenario is generally clear with minor missing details.
+	
+
+The scenario is vague, incomplete, or lacks clarity.
+	
+
+No scenario or extremely poor description.
+	
+
+1
+
+Basic Project Requirements
+	
+
+Requirements are well-defined, relevant, and logically derived from the scenario.
+	
+
+Requirements are mostly clear with some minor gaps.
+	
+
+Limited or unclear requirements; missing key elements.
+	
+
+No requirements or irrelevant content.
+	
+
+1
+
+GitHub/GitLab Repository Setup
+	
+
+Repository fully created, well‑structured, includes README, folders, and proper version control practices.
+	
+
+Repository created with basic structure; minor improvements needed.
+	
+
+The repository exists, but poorly structured or missing documentation.
+	
+
+No repository or unusable structure.
+	
+
+1
+
+Wiki Setup for Collaboration & Documentation
+	
+
+Wiki created with clear structure, sections for documentation, and visible team contributions.
+	
+
+Wiki is set up but incomplete or lacking some structure.
+	
+
+Wiki minimally created; poor organization or missing content.
+	
+
+No Wiki created.
+	
+
+1

@@ -1,0 +1,113 @@
+@startuml BidHub Runtime View 3 of 3 - Infrastructure Registration
+!theme plain
+skinparam componentFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam nodesep 20
+skinparam ranksep 60
+
+skinparam component {
+    BackgroundColor<<FunctionalMicroservice>>     #FFE0B2
+    BorderColor<<FunctionalMicroservice>>         #A80036
+    BackgroundColor<<InfrastructureMicroservice>> #E0E0E0
+    BorderColor<<InfrastructureMicroservice>>     #616161
+}
+
+title **BidHub — Runtime View (3 / 3)**\n//Infrastructure plane — Eureka service discovery + Spring Cloud Config bootstrap.//\nLEMMA Operation viewpoint, Fig. 3 Lakeside-Mutual style (Sorgalla et al., 2021).\nOwner: Mykola Vaskevych (22372199)
+
+' ============================================================
+' INFRASTRUCTURE COMPONENTS (top centre)
+' ============================================================
+component "<<Infrastructure Microservice>>\n**Eureka Server**\n(Spring Cloud Netflix)\n:8761" as Eureka <<InfrastructureMicroservice>>
+component "<<Infrastructure Microservice>>\n**Config Server**\n(Spring Cloud Config)\n:8888" as Config <<InfrastructureMicroservice>>
+
+' ============================================================
+' CLIENT SERVICES (bottom, grouped in one package)
+' ============================================================
+package "All 8 BidHub services (7 functional + API gateway)" as Clients <<Rectangle>> {
+    component "<<Infrastructure Microservice>>\n**api-gateway**\n:8080" as Gateway <<InfrastructureMicroservice>>
+    component "<<Functional Microservice>>\n**user-service**\n:8081" as User <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**catalog-service**\n:8082" as Catalogue <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**auction-service**\n:8083" as Auction <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**order-service**\n:8084" as Order <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**payment-service**\n:8085" as Payment <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**notification-service**\n:8086" as Notif <<FunctionalMicroservice>>
+    component "<<Functional Microservice>>\n**admin-service**\n:8087" as Admin <<FunctionalMicroservice>>
+}
+
+' ============================================================
+' AGGREGATED ARROWS — one per direction, from the package boundary.
+' Every service in the package performs both flows; showing 8 x 2
+' individual arrows would overwhelm the diagram, so the pattern is
+' expressed aggregately and the accompanying note enumerates it.
+' ============================================================
+Clients -[#0277BD,bold]--> Eureka : "**http** — register on startup\n+ periodic heartbeat\n(all 8 services)"
+Clients -[#388E3C,bold,dashed]--> Config : "**http** — bootstrap config\nat startup\n(all 8 services)"
+
+' ============================================================
+' EXPANDED LISTING NOTE
+' ============================================================
+note right of Eureka
+    **Eureka registration — per-service**
+    ————————————————————
+    Each of the 8 services above:
+    • Registers its `spring.application.name` +
+      host/port with Eureka on startup.
+    • Sends periodic heartbeat (default 30 s)
+      to stay in the registry.
+    • Uses `lb://<service-id>` URIs (resolved
+      via Eureka) for all cross-service REST
+      calls — no hard-coded host:port anywhere.
+
+    **api-gateway** additionally **discovers**
+    downstream routes via Eureka (see Runtime
+    View 1/3 for the request-path arrows).
+end note
+
+note right of Config
+    **Config Server bootstrap — per-service**
+    ———————————————————————
+    At application startup, every service (and
+    the API gateway) fetches its profile-specific
+    YAML from Config Server **before** building
+    the Spring application context.
+
+    Profile files (one per service, in
+    `backend/config-server/src/main/resources/config/`):
+    • `api-gateway-dev.yml`
+    • `user-service-dev.yml`
+    • `catalog-service-dev.yml`
+    • `auction-service-dev.yml`
+    • `order-service-dev.yml`
+    • `payment-service-dev.yml`
+    • `notification-service-dev.yml`
+    • `admin-service-dev.yml`
+
+    Bootstrap is a **startup-only** flow (dashed),
+    not a hot-reload path in our current setup.
+end note
+
+' ============================================================
+' LEGEND
+' ============================================================
+legend bottom left
+    **Infrastructure registration — this diagram**
+    —————————————————————————
+    | Colour | Protocol flow |
+    | <#0277BD> | Eureka registration + heartbeat (solid, continuous) |
+    | <#388E3C> | Config Server bootstrap (dashed, startup-only) |
+    ——
+    The pattern is homogeneous across all 8 services;
+    per Sorgalla 2021 §Background, each microservice
+    is independently deployable and discovers peers
+    through Eureka rather than through hard-coded URLs.
+    ——
+    **This is 3 of 3 runtime views.** See also:
+    • `runtime_view_1_sync.puml` — HTTP request path
+    • `runtime_view_2_async.puml` — AMQP event flows
+endlegend
+
+@enduml

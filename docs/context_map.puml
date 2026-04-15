@@ -1,0 +1,211 @@
+@startuml BidHub Context Map - Inter-Context Contracts
+!theme plain
+skinparam packageFontSize 13
+skinparam noteFontSize 10
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam packageStyle frame
+skinparam component {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+}
+
+title **BidHub — Context Map**\nInter-Context Relationships, Contracts & Saga Flows\nTeam: BidHub (CS4135)
+
+' ============================================================
+' BOUNDED CONTEXTS
+' ============================================================
+
+package "<<BoundedContext>>\n**Auction Context**\nOwner: Mykola V.\n//Core Domain//\nOwns: Listing + Auction + Bid" as AuctionCtx #FFE0B2 {
+}
+
+package "<<BoundedContext>>\n**Admin Context**\nOwner: Mykola V.\n//Supporting Subdomain//\nOwns: Category + Reports + Moderation" as AdminCtx #FFE0B2 {
+}
+
+package "<<BoundedContext>>\n**Account Context**\nOwner: Xunze T.\n//Supporting Subdomain//\nOwns: User + Auth + Address" as AccountCtx #B3E5FC {
+}
+
+package "<<BoundedContext>>\n**Payment Context**\nOwner: Zitao Z.\n//Supporting Subdomain//\nOwns: Wallet + Transaction + Escrow" as PaymentCtx #B3E5FC {
+}
+
+package "<<BoundedContext>>\n**Order Context**\nOwner: Zitao Z.\n//Supporting Subdomain//\nOwns: Order lifecycle" as OrderCtx #B3E5FC {
+}
+
+package "<<BoundedContext>>\n**Catalogue Context**\nOwner: Zihan\n//Read Projection//\nIndexes Listing+Auction for\nsearch, filtering, and category\nactive-listing counts." as CatalogueCtx #FFF9C4 {
+}
+
+package "<<BoundedContext>>\n**Delivery/Escrow Context**\nOwner: Oliver F.\n//Supporting Subdomain//\nOwns: Delivery lifecycle" as DeliveryCtx #C8E6C9 {
+}
+
+package "<<BoundedContext>>\n**Notification Context**\nOwner: Oliver F.\n//Generic Subdomain//\nConformist: consumes upstream events" as NotifCtx #C8E6C9 {
+}
+
+package "<<BoundedContext>>\n**API Gateway**\nOwner: Xunze T.\n//Infrastructure//\nRouting + JWT validation" as GatewayCtx #E0E0E0 {
+}
+
+' ============================================================
+' MESSAGE BROKER
+' ============================================================
+queue "**Message Broker**\n(RabbitMQ)" as Broker #F8BBD0
+
+' ============================================================
+' ASYNC EVENT FLOWS
+' ============================================================
+
+' --- Auction publishes ---
+AuctionCtx -[#FF6600,bold]--> Broker : "**publishes:**\nAuctionCreated (carries listing details)\nBidPlaced\nAuctionSold / BuyNowExecuted\nAuctionEnded / AuctionCancelled\nAuctionCompleted"
+
+' --- Auction event consumers ---
+Broker -[#FF6600]--> PaymentCtx : "AuctionSold / BuyNowExecuted\n→ deduct wallet (PaymentDeducted)\n→ hold escrow (EscrowHeld)"
+Broker -[#FF6600]--> OrderCtx : "AuctionSold / BuyNowExecuted\n→ create Order (AWAITING_COLLECTION)"
+Broker -[#FF6600]--> NotifCtx : "BidPlaced → outbid alert\nAuctionSold → winner + seller\nAuctionEnded → seller notified"
+Broker -[#FF6600]--> CatalogueCtx : "AuctionCreated → index listing\nAuctionSold/Ended/Cancelled\n→ update listing status\nAuctionCompleted → finalize listing\n(Catalogue is a read projection)"
+
+' --- Admin publishes ---
+AdminCtx -[#9C27B0,bold]--> Broker : "**publishes:**\nListingRemovedByAdmin\nCategoryCreated/Updated/Deleted\nReportSubmitted / ReportResolved"
+
+' --- Admin event consumers ---
+Broker -[#9C27B0]--> AuctionCtx : "ListingRemovedByAdmin\n→ auction.markRemoved()\nCategoryCreated/Updated/Deleted\n→ update local CategoryRef cache"
+Broker -[#9C27B0]--> CatalogueCtx : "ListingRemovedByAdmin\n→ remove from index\nCategoryCreated/Updated/Deleted\n→ update category filters"
+
+' --- Payment publishes ---
+PaymentCtx -[#00897B,bold]--> Broker : "**publishes:**\nPaymentDeducted\nEscrowHeld\nEscrowReleased\nPaymentFailed"
+
+' --- Payment event consumers ---
+Broker -[#00897B]--> OrderCtx : "PaymentFailed → cancel order\n(compensating event)\nEscrowHeld → confirm payment step"
+Broker -[#00897B]--> AuctionCtx : "PaymentFailed\n→ auction.revertToEnded()\n(compensating: SOLD → ENDED)"
+Broker -[#00897B]--> NotifCtx : "PaymentDeducted → receipt\nEscrowReleased → funds available"
+
+' --- Order publishes ---
+OrderCtx -[#1565C0,bold]--> Broker : "**publishes:**\nOrderCreated\nOrderCompleted\nOrderCancelled"
+
+' --- Order event consumers ---
+Broker -[#1565C0]--> DeliveryCtx : "OrderCreated → create delivery job\nOrderCancelled → cancel delivery job"
+Broker -[#1565C0]--> NotifCtx : "OrderCreated → settlement details\nOrderCompleted → confirmation\nOrderCancelled → inform buyer + seller"
+Broker -[#1565C0]--> AuctionCtx : "OrderCompleted\n→ auction.markCompleted()\n(SOLD → COMPLETED)"
+
+' --- Delivery publishes ---
+DeliveryCtx -[#2E7D32,bold]--> Broker : "**publishes:**\nDeliveryJobCreated\nGoodsCollected\nGoodsDelivered\nDeliveryConfirmed\nDeliveryDisputed"
+
+' --- Delivery event consumers ---
+Broker -[#2E7D32]--> PaymentCtx : "DeliveryConfirmed\n→ release escrow\nDeliveryDisputed\n→ escrow remains HELD"
+Broker -[#2E7D32]--> OrderCtx : "GoodsCollected → BEING_DELIVERED\nGoodsDelivered → DELIVERED\nDeliveryConfirmed → COMPLETED"
+Broker -[#2E7D32]--> NotifCtx : "DeliveryJobCreated → notify seller\n  (driver assigned)\nGoodsCollected → notify seller\nGoodsDelivered → notify buyer\nDeliveryDisputed → notify admin"
+
+' --- Account publishes ---
+AccountCtx -[#5D4037,bold]--> Broker : "**publishes:**\nUserRegistered\nUserStatusChanged"
+Broker -[#5D4037]--> NotifCtx : "UserRegistered → welcome"
+
+' ============================================================
+' SYNCHRONOUS REST CALLS
+' ============================================================
+
+AuctionCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: validate bidder\n(ACL: User → BidderRef)"
+
+AdminCtx .[#0277BD,dashed].> AccountCtx : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
+
+AdminCtx .[#0277BD,dashed].> CatalogueCtx : "<<Customer-Supplier>>\nREST: check active listings\nfor category deactivation (Admin INV-CAT2)"
+
+AdminCtx .[#0277BD,dashed].> AuctionCtx : "<<Customer-Supplier>>\nREST: read auction details\n(ACL → ListingSnapshot)"
+
+GatewayCtx .[#616161,dashed].> AccountCtx : "REST: validate JWT\n+ role-based routing"
+
+' ============================================================
+' DDD / LEMMA FRAMING (paper reference)
+' ============================================================
+note top of Broker
+    **Inter-context contract style — Published Language**
+    ————————————————————————————————
+    Every inter-context coupling on this map is one
+    of three DDD patterns (per Sorgalla, Wizenty,
+    Rademacher, Sachweh & Zündorf, 2021, *Applying
+    Model-Driven Engineering to Stimulate the Adoption
+    of DevOps Processes in SMOs*, §Background and
+    §Language Ecosystem for Modeling Microservice
+    Architecture):
+
+    • **Published Language** — solid arrows through
+      the broker. Events are self-contained; consumers
+      never call back to the producer. This preserves
+      the *service-specific independence* the paper
+      names as a defining MSA property.
+    • **Customer-Supplier** — dashed REST arrows. The
+      downstream context tolerates the upstream API
+      contract as-is but wraps it in an ACL Value
+      Object so that upstream model changes never
+      leak into the downstream domain.
+    • **Conformist** — Notification accepts upstream
+      schemas verbatim (no ACL). Paper calls this
+      out as acceptable when the downstream has no
+      domain logic of its own to defend.
+
+    This context map is the **Domain Data viewpoint**
+    at the inter-context level. The per-context PUMLs
+    give the same viewpoint at the intra-context level.
+    `runtime_view_{1_sync,2_async,3_infra}.puml` gives a lightweight version of
+    the paper's **Operation viewpoint** (Fig. 3
+    Lakeside Mutual style).
+end note
+
+' ============================================================
+' SAGA
+' ============================================================
+note bottom of Broker
+    **Saga: Auction Close → Settlement (Choreography)**
+    Per Workflow Diagram (Fig. 3) and Architecture doc (Section 3.2).
+    ————————————————————————————————————
+    **Happy path:**
+    1. AuctionClosingService → auction.close() → **AuctionSold**
+    2. Payment → deducts buyer wallet → **PaymentDeducted**
+    3. Payment → holds funds in escrow (status=HELD) → **EscrowHeld**
+    4. Order → creates order (AWAITING_COLLECTION) → **OrderCreated**
+    5. Delivery → driver accepts job → **DeliveryJobCreated**
+    6. **Two-step verification (FR-DE02):**
+       a. Seller confirms collection (verifies driver) → **GoodsCollected**
+       b. Order → BEING_DELIVERED
+    7. Driver transports → marks DELIVERED → **GoodsDelivered**
+    8. **Buyer confirms receipt** → **DeliveryConfirmed**
+       (Both seller + buyer must confirm: FR-DE02, FR-DE03, FR-DE04)
+    9. Payment → releases escrow to seller → **EscrowReleased**
+    10. Order → COMPLETED → **OrderCompleted**
+    11. Auction → COMPLETED → **AuctionCompleted**
+
+    **Compensating events:**
+    • **PaymentFailed** → Order cancelled, Auction SOLD → ENDED
+    • **DeliveryDisputed** (buyer raises dispute, per FR-DE03)
+      → Escrow HELD, admin reviews via Admin context
+    • Eventual consistency via Saga; no distributed ACID.
+
+    **Note:** In original UML (Fig. 1), Bid has a direct
+    "secured by" relationship with Escrow. In this DDD model,
+    Escrow lives in Payment context. The cross-context link
+    is via AuctionSold event carrying winnerId + amount →
+    Payment creates Escrow. This is an inter-context
+    reference by ID, not a direct object association.
+end note
+
+' ============================================================
+' LEGEND
+' ============================================================
+legend bottom left
+    **Context Map Legend**
+    ——————————————————
+    | Color | Owner |
+    | <#FFE0B2> | Mykola (Auction + Admin + CI/CD) |
+    | <#B3E5FC> | Xunze (Account + Gateway) / Zitao (Payment + Order) |
+    | <#C8E6C9> | Oliver (Delivery/Escrow + Notification) |
+    | <#FFF9C4> | Zihan (Catalogue read projection + Frontend) |
+    | <#E0E0E0> | Infrastructure |
+    ——
+    **Solid arrows** = async domain events via message broker
+    **Dashed arrows** = synchronous REST API calls
+    ——
+    **DDD Relationship patterns:**
+    • **Published Language** — events define inter-context contracts
+    • **Customer-Supplier** — downstream calls upstream REST API
+    • **Anti-Corruption Layer** — each context maps external
+      entities to own Value Objects (no shared domain models)
+    • **Conformist** — Notification accepts upstream schemas as-is
+endlegend
+
+@enduml

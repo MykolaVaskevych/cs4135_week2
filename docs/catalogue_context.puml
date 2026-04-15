@@ -1,0 +1,460 @@
+@startuml Catalogue Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Catalogue Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\n//Read projection — indexes Auction + Admin for search, filtering, and\ncategory active-listing counts. No domain events published; no write REST.//\nOwner: Zihan Zhuo (24247456)
+
+' ============================================================
+' BOUNDED CONTEXT
+' ============================================================
+package "<<BoundedContext>>\nCatalogue Context" as CatalogueBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE 1: IndexedListing  (read projection of Auction)
+    ' Maintained by consuming domain events from Auction + Admin.
+    ' Not a write-side aggregate — no REST write endpoints exist.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nIndexedListing" as IndexedListing {
+        <<DefinesIdentity>> -listingId : UUID
+        -auctionId : UUID
+        -sellerId : UUID
+        -title : String
+        -description : String
+        -photos : List<String>
+        -categoryId : UUID
+        -startingPrice : Money
+        -reservePrice : Money
+        -currentPrice : Money
+        -buyNowPrice : Money [0..1]
+        -status : ListingStatus
+        -endTime : DateTime
+        -lastIndexedAt : DateTime
+        __
+        {static} +fromAuctionCreated(event : AuctionCreated) : IndexedListing
+        +applyBidPlaced(event : BidPlaced) : void
+        +applyAuctionSold(event : AuctionSold) : void
+        +applyAuctionEnded(event : AuctionEnded) : void
+        +applyAuctionCancelled(event : AuctionCancelled) : void
+        +applyBuyNowExecuted(event : BuyNowExecuted) : void
+        +applyAuctionCompleted(event : AuctionCompleted) : void
+        +applyListingRemovedByAdmin(event : ListingRemovedByAdmin) : void
+        +isSearchable() : Boolean
+    }
+
+    ' ============================================================
+    ' AGGREGATE 2: Category  (read projection of Admin's Category)
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nCategory" as Category {
+        <<DefinesIdentity>> -categoryId : UUID
+        -name : String
+        -parentId : UUID [0..1]
+        -depth : Integer
+        -slug : String
+        -isActive : Boolean
+        -lastIndexedAt : DateTime
+        __
+        {static} +fromCategoryCreated(event : CategoryCreated) : Category
+        +applyCategoryUpdated(event : CategoryUpdated) : void
+        +applyCategoryDeleted(event : CategoryDeleted) : void
+        +getPath() : CategoryPath
+    }
+
+    ' ============================================================
+    ' VALUE OBJECTS
+    ' ============================================================
+    class "<<Value Object>>\nMoney" as Money {
+        -amount : BigDecimal
+        -currency : String {default = "EUR"}
+        __
+        +isGreaterThan(other : Money) : Boolean
+    }
+
+    class "<<Value Object>>\nCategoryPath" as CategoryPath {
+        -segments : List<String>
+        -fullPath : String
+        __
+        +toString() : String
+    }
+
+    class "<<Value Object>>\nSearchQuery" as SearchQuery {
+        -keyword : String [0..1]
+        -categoryId : UUID [0..1]
+        -minPrice : BigDecimal [0..1]
+        -maxPrice : BigDecimal [0..1]
+        -sortBy : SortKey
+        -page : Integer
+        -pageSize : Integer
+        __
+        +isValid() : Boolean
+    }
+
+    ' ============================================================
+    ' ENUMERATIONS
+    ' ============================================================
+    enum "<<Enumeration>>\nListingStatus" as ListingStatus {
+        ACTIVE
+        SOLD
+        ENDED
+        CANCELLED
+        REMOVED
+    }
+
+    enum "<<Enumeration>>\nSortKey" as SortKey {
+        RELEVANCE
+        ENDING_SOON
+        PRICE_ASC
+        PRICE_DESC
+        NEWEST
+    }
+
+    ' ============================================================
+    ' REPOSITORIES (one per aggregate root)
+    ' ============================================================
+    class "<<Repository>>\nIndexedListingRepository" as ListingRepo {
+        +findById(listingId : UUID) : IndexedListing
+        +search(query : SearchQuery) : Page<IndexedListing>
+        +findByCategoryId(categoryId : UUID) : List<IndexedListing>
+        +countActiveByCategoryId(categoryId : UUID) : Long
+        +save(listing : IndexedListing) : IndexedListing
+    }
+
+    class "<<Repository>>\nCategoryRepository" as CategoryRepo {
+        +findById(categoryId : UUID) : Category
+        +findAll() : List<Category>
+        +findActive() : List<Category>
+        +findChildren(parentId : UUID) : List<Category>
+        +save(category : Category) : Category
+    }
+
+    ' ============================================================
+    ' APPLICATION SERVICES (query side)
+    ' ============================================================
+    class "<<Service>>\nSearchService" as SearchService {
+        +search(query : SearchQuery) : Page<IndexedListing>
+        +findListing(listingId : UUID) : IndexedListing
+        +countActiveInCategory(categoryId : UUID) : Long
+    }
+
+    class "<<Service>>\nCategoryTreeService" as CategoryTreeService {
+        +buildTree() : List<Category>
+        +listActive() : List<Category>
+        +getPath(categoryId : UUID) : CategoryPath
+    }
+
+    ' ============================================================
+    ' APPLICATION SERVICE (projection side — consumes events)
+    ' Renamed from "EventHandlerService" to make the read-projection
+    ' role explicit. Still the only write path into the two aggregates.
+    ' ============================================================
+    class "<<Service>>\nProjectionUpdater" as Projector {
+        +onAuctionCreated(event : AuctionCreated) : void
+        +onBidPlaced(event : BidPlaced) : void
+        +onAuctionSold(event : AuctionSold) : void
+        +onAuctionEnded(event : AuctionEnded) : void
+        +onAuctionCancelled(event : AuctionCancelled) : void
+        +onBuyNowExecuted(event : BuyNowExecuted) : void
+        +onAuctionCompleted(event : AuctionCompleted) : void
+        +onListingRemovedByAdmin(event : ListingRemovedByAdmin) : void
+        +onCategoryCreated(event : CategoryCreated) : void
+        +onCategoryUpdated(event : CategoryUpdated) : void
+        +onCategoryDeleted(event : CategoryDeleted) : void
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — CONSUMED
+    ' Catalogue PUBLISHES NOTHING. It is a pure read projection.
+    ' Every event below is owned by another context; the schemas
+    ' mirror the producer exactly (see auction_context.puml /
+    ' admin_context.puml). Shown here so the ACL / projection
+    ' surface is explicit.
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nAuctionCreated\n//consumed, owned by Auction//" as EvAuctionCreated {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -title : String
+            -description : String
+            -photos : List<String>
+            -categoryId : UUID
+            -startingPrice : Money
+            -reservePrice : Money
+            -buyNowPrice : Money [0..1]
+            -endTime : DateTime
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nBidPlaced\n//consumed, owned by Auction//" as EvBidPlaced {
+            -auctionId : UUID
+            -bidId : UUID
+            -bidderId : UUID
+            -amount : Money
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionSold\n//consumed, owned by Auction//" as EvAuctionSold {
+            -auctionId : UUID
+            -listingId : UUID
+            -winnerId : UUID
+            -winningBidAmount : Money
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionEnded\n//consumed, owned by Auction//" as EvAuctionEnded {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionCancelled\n//consumed, owned by Auction//" as EvAuctionCancelled {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nBuyNowExecuted\n//consumed, owned by Auction//" as EvBuyNow {
+            -auctionId : UUID
+            -listingId : UUID
+            -buyerId : UUID
+            -price : Money
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionCompleted\n//consumed, owned by Auction//" as EvAuctionCompleted {
+            -auctionId : UUID
+            -listingId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nListingRemovedByAdmin\n//consumed, owned by Admin//" as EvListingRemoved {
+            -auctionId : UUID
+            -adminId : UUID
+            -reason : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryCreated\n//consumed, owned by Admin//" as EvCategoryCreated {
+            -categoryId : UUID
+            -name : String
+            -description : String
+            -parentCategoryId : UUID [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryUpdated\n//consumed, owned by Admin//" as EvCategoryUpdated {
+            -categoryId : UUID
+            -name : String
+            -description : String
+            -parentCategoryId : UUID [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryDeleted\n//consumed, owned by Admin//" as EvCategoryDeleted {
+            -categoryId : UUID
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+
+    ' Value Object usage
+    IndexedListing ..> Money : uses
+    IndexedListing --> ListingStatus : status
+    SearchQuery --> SortKey : sortBy
+    Category ..> CategoryPath : derives
+
+    ' Repositories
+    ListingRepo ..> IndexedListing : retrieves / persists
+    CategoryRepo ..> Category : retrieves / persists
+
+    ' Query services
+    SearchService ..> ListingRepo : uses
+    SearchService ..> SearchQuery : accepts
+    CategoryTreeService ..> CategoryRepo : uses
+    CategoryTreeService ..> CategoryPath : builds
+
+    ' Projection updater is the only write path into the aggregates
+    Projector ..> ListingRepo : saves/updates
+    Projector ..> CategoryRepo : saves/updates
+
+    ' Every consumed event is handled by ProjectionUpdater
+    Projector ..> EvAuctionCreated    : handles
+    Projector ..> EvBidPlaced         : handles
+    Projector ..> EvAuctionSold       : handles
+    Projector ..> EvAuctionEnded      : handles
+    Projector ..> EvAuctionCancelled  : handles
+    Projector ..> EvBuyNow            : handles
+    Projector ..> EvAuctionCompleted  : handles
+    Projector ..> EvListingRemoved    : handles
+    Projector ..> EvCategoryCreated   : handles
+    Projector ..> EvCategoryUpdated   : handles
+    Projector ..> EvCategoryDeleted   : handles
+}
+
+' ============================================================
+' INVARIANTS
+' ============================================================
+note right of Category
+    **Aggregate Invariants (read projection):**
+    ————————————————————————
+    **INV-C1:** Category is a **read projection** of
+    Admin's canonical Category aggregate. **Admin owns**
+    all write-side rules (uniqueness within siblings,
+    parent validity, deactivation check). Catalogue
+    **never** enforces these — if the local copy is
+    inconsistent, Admin is the source of truth.
+
+    **INV-C2:** `depth` mirrors Admin's hierarchical
+    depth; used locally to cap tree-render cost.
+
+    **INV-C3:** `isActive` is flipped to `false` only
+    when `CategoryDeleted` is received from Admin.
+    Never flipped locally — prevents projection drift.
+
+    **INV-C4:** `parentId` is an ID reference only
+    (no object association). The tree is assembled on
+    demand by `CategoryTreeService.buildTree()`.
+
+    //Note: Admin may publish `CategoryCreated` with a//
+    //`parentCategoryId` that has not yet been projected//
+    //(out-of-order delivery). Projector tolerates this//
+    //and links parents lazily on `findChildren`.//
+end note
+
+note right of IndexedListing
+    **Aggregate Invariants (read projection):**
+    ————————————————————————
+    **INV-L1:** Mutations happen **only** via consumed
+    domain events. There is no write REST endpoint, no
+    direct repository save from controllers.
+
+    **INV-L2:** `search()` returns only listings whose
+    `isSearchable()` is true — i.e. `status == ACTIVE`.
+    Closed listings remain in the index for deep-linking
+    (historical view) but are excluded from search.
+
+    **INV-L3:** `listingId`, `auctionId`, and `sellerId`
+    are **immutable** after the initial `AuctionCreated`
+    projection. Subsequent events may only update status,
+    currentPrice, and lastIndexedAt.
+
+    **INV-L4:** **Idempotent projection.** Projector
+    compares `event.occurredAt` with the aggregate's
+    `lastIndexedAt` and skips older events. Safe under
+    the broker's at-least-once delivery semantics.
+end note
+
+note right of ListingStatus
+    **Derived from Auction's `AuctionStatus`:**
+    ———————————————————————
+    Auction full enum (7):
+      PENDING, ACTIVE, SOLD, ENDED,
+      CANCELLED, REMOVED, COMPLETED.
+
+    Catalogue mirror (5):
+      ACTIVE, SOLD, ENDED, CANCELLED, REMOVED.
+
+    **Mapping notes:**
+    • **PENDING** — never indexed. Auction publishes
+      `AuctionCreated` on PENDING → ACTIVE so the
+      projection starts at ACTIVE.
+    • **COMPLETED** — collapsed to `SOLD` in the
+      search view. The SOLD → COMPLETED transition
+      only matters to settlement; it is invisible to
+      searching users.
+    • The Catalogue enum is a **subset**, not a
+      distinct domain. If Auction adds a state,
+      this enum must be updated.
+end note
+
+note bottom of Projector
+    **Anti-Corruption Layer (ACL):**
+    Every `on*()` handler translates an external event
+    payload into Catalogue's own aggregate model
+    (`IndexedListing` / `Category`). Catalogue **never**
+    imports Auction's or Admin's domain classes; the
+    `AuctionCreated` / `CategoryCreated` / etc. types
+    shown on this diagram are **Catalogue's local
+    conformist representations** of the producer
+    schemas, not shared types.
+
+    **Idempotency:** see INV-L4. The projector keeps
+    event handling exactly-once-effective even under
+    at-least-once broker delivery — matches the
+    Published Language guarantees the context map
+    relies on (Sorgalla 2021 §Background —
+    service-specific independence).
+
+    //Catalogue publishes NO domain events. It is a//
+    //pure read projection. All arrows from Projector//
+    //to events point to "handles", never "publishes".//
+end note
+
+note bottom of SearchService
+    **REST API (published by Catalogue — query-only)**
+    ——————————————————————————
+    • `GET /api/catalogue/search?q&category&minPrice&maxPrice&sortBy&page`
+      → full-text / faceted search over ACTIVE listings.
+    • `GET /api/catalogue/listings/{listingId}`
+      → single `IndexedListing` (works for closed listings too).
+    • `GET /api/catalogue/categories`
+      → flat list or tree of categories (pass `?tree=true`).
+    • `GET /api/catalogue/categories/{id}/listings`
+      → all listings in a category (paged).
+    • `GET /api/catalogue/categories/{id}/active-count`
+      → **cross-context query source for Admin INV-CAT2**.
+        Admin's `CategoryManagementService.deactivateCategory()`
+        calls this before flipping `isActive = false`. See
+        `admin_context.puml` INV-CAT2 and `context_map.puml`.
+
+    **No write endpoints exist.** Category creation and
+    listing creation live in Admin and Auction respectively.
+end note
+
+' ============================================================
+' EXTERNAL CONTEXT REFERENCES
+' ============================================================
+package "<<BoundedContext>>\nAuction Context (external)" as AuctionExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nAdmin Context (external)" as AdminExt #E8E8E8 {
+}
+
+' --- async event subscriptions (inbound, via broker) ---
+AuctionExt -[#FF6600,dashed]-> CatalogueBC : "**Events** (async via broker):\nAuctionCreated, BidPlaced,\nAuctionSold, AuctionEnded,\nAuctionCancelled, BuyNowExecuted,\nAuctionCompleted"
+
+AdminExt   -[#9C27B0,dashed]-> CatalogueBC : "**Events** (async via broker):\nListingRemovedByAdmin,\nCategoryCreated, CategoryUpdated,\nCategoryDeleted"
+
+' --- synchronous inbound REST (Admin → Catalogue for Admin INV-CAT2) ---
+AdminExt   .[#0277BD,dashed].> CatalogueBC : "<<Customer-Supplier>>\nREST: GET active-listing count\nfor category deactivation (Admin INV-CAT2).\nAdmin is downstream customer;\nCatalogue is upstream supplier."
+
+note bottom of CatalogueBC
+    **Catalogue is a read projection** —
+    no domain events published, no write REST accepted.
+    Outputs: query REST endpoints consumed by the
+    frontend and by Admin (for Admin INV-CAT2).
+
+    //Per context map (Sorgalla et al. 2021,//
+    //§Background — MSA service-specific independence;//
+    //Published Language / Customer-Supplier / ACL).//
+end note
+
+@enduml

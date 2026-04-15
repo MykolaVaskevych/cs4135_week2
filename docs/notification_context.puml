@@ -1,0 +1,184 @@
+@startuml Notification Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Notification Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Oliver Fitzgerald (22365958)
+
+package "<<BoundedContext>>\nNotification Context" as NotifBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE ROOT: Notification
+    ' Audit record of every notification dispatched
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nNotification" as Notification {
+        <<DefinesIdentity>> -notificationId : UUID
+        -recipientId : UUID
+        -type : NotificationType
+        -channel : NotificationChannel
+        -subject : String
+        -body : String
+        -status : NotificationStatus
+        -retryCount : Integer
+        -sentAt : DateTime [0..1]
+        -createdAt : DateTime
+        __
+        +markSent(sentAt : DateTime) : void
+        +markFailed() : void
+        +incrementRetry() : void
+        +canRetry() : Boolean
+    }
+
+    ' ============================================================
+    ' AGGREGATE ROOT: NotificationTemplate
+    ' Reusable templates per event type
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nNotificationTemplate" as NotificationTemplate {
+        <<DefinesIdentity>> -templateId : UUID
+        -type : NotificationType
+        -channel : NotificationChannel
+        -subjectTemplate : String
+        -bodyTemplate : String
+        -isActive : Boolean
+        __
+        +render(variables : Map) : RenderedMessage
+        +deactivate() : void
+    }
+
+    ' ============================================================
+    ' VALUE OBJECT: RenderedMessage
+    ' ============================================================
+    class "<<Value Object>>\nRenderedMessage" as RenderedMessage {
+        -subject : String
+        -body : String
+    }
+
+    ' ============================================================
+    ' ENUM: NotificationType
+    ' ============================================================
+    enum "<<Enumeration>>\nNotificationType" as NotificationType {
+        WELCOME
+        BID_OUTBID
+        AUCTION_WON
+        AUCTION_ENDED_SELLER
+        PAYMENT_RECEIPT
+        ESCROW_RELEASED
+        ORDER_CREATED
+        ORDER_COMPLETED
+        ORDER_CANCELLED
+        DRIVER_ASSIGNED
+        GOODS_COLLECTED
+        GOODS_DELIVERED
+        DISPUTE_RAISED
+        USER_SUSPENDED
+    }
+
+    ' ============================================================
+    ' ENUM: NotificationChannel
+    ' ============================================================
+    enum "<<Enumeration>>\nNotificationChannel" as NotificationChannel {
+        EMAIL
+        IN_APP
+    }
+
+    ' ============================================================
+    ' ENUM: NotificationStatus
+    ' ============================================================
+    enum "<<Enumeration>>\nNotificationStatus" as NotificationStatus {
+        PENDING
+        SENT
+        FAILED
+    }
+
+    ' ============================================================
+    ' REPOSITORY
+    ' ============================================================
+    interface "<<Repository>>\nNotificationRepository" as NotificationRepository {
+        +findById(id : UUID) : Optional<Notification>
+        +findByRecipientId(recipientId : UUID) : List<Notification>
+        +findPendingRetries() : List<Notification>
+        +save(n : Notification) : Notification
+    }
+
+    interface "<<Repository>>\nNotificationTemplateRepository" as NotificationTemplateRepository {
+        +findByTypeAndChannel(type, channel) : Optional<NotificationTemplate>
+        +findAll() : List<NotificationTemplate>
+        +save(t : NotificationTemplate) : NotificationTemplate
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICE
+    ' ============================================================
+    class "<<Domain Service>>\nNotificationDispatchService" as NotificationDispatchService {
+        +dispatch(recipientId, type, variables) : Notification
+        +retryFailed() : void
+    }
+
+    ' ============================================================
+    ' INVARIANT NOTES
+    ' ============================================================
+    note top of Notification
+        **Invariants:**
+        INV-N1: recipientId must not be null
+        INV-N2: a matching active template must
+                exist for the type+channel combo
+        INV-N3: retry capped at 3 attempts;
+                after 3 failures status = FAILED permanently
+        INV-N4: Notification is append-only — no update
+                or delete after creation (audit record)
+    end note
+
+    note top of NotificationTemplate
+        **Conformist pattern:**
+        Notification accepts upstream event schemas
+        verbatim — no ACL. Event payload fields are
+        mapped directly into template variables.
+        No anti-corruption layer needed because
+        Notification has no domain logic to protect.
+    end note
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+    Notification --> NotificationType
+    Notification --> NotificationChannel
+    Notification --> NotificationStatus
+    NotificationTemplate --> NotificationType
+    NotificationTemplate --> NotificationChannel
+    NotificationTemplate ..> RenderedMessage : "<<produces>>"
+    NotificationRepository ..> Notification : "<<manages>>"
+    NotificationTemplateRepository ..> NotificationTemplate : "<<manages>>"
+    NotificationDispatchService ..> Notification : "<<creates>>"
+    NotificationDispatchService ..> NotificationTemplate : "<<uses>>"
+}
+
+note right of NotifBC
+    **Conformist context — no upstream REST calls.**
+    Consumes (async via broker only):
+    • BidPlaced (Auction) → BID_OUTBID to previous high bidder
+    • AuctionSold/BuyNowExecuted (Auction) → AUCTION_WON to buyer,
+      AUCTION_ENDED_SELLER to seller
+    • AuctionEnded (Auction) → AUCTION_ENDED_SELLER to seller
+    • PaymentDeducted (Payment) → PAYMENT_RECEIPT to buyer
+    • EscrowReleased (Payment) → ESCROW_RELEASED to seller
+    • OrderCreated (Order) → ORDER_CREATED to buyer + seller
+    • OrderCompleted/Cancelled (Order) → status update notifications
+    • DeliveryJobCreated (Delivery) → DRIVER_ASSIGNED to seller
+    • GoodsCollected/Delivered (Delivery) → status notifications
+    • DeliveryDisputed (Delivery) → DISPUTE_RAISED to admin
+    • UserRegistered (Account) → WELCOME to new user
+    • UserStatusChanged (Account) → USER_SUSPENDED to affected user
+end note
+
+@enduml

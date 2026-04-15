@@ -1,0 +1,220 @@
+@startuml API Gateway Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — API Gateway Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\n//Infrastructure context — DDD patterns used analogically; route definitions are static YAML, not persisted.//\nOwner: Xunze Tan (24247472)
+
+' ============================================================
+' BOUNDED CONTEXT
+' ============================================================
+package "<<BoundedContext>>\nAPI Gateway Context" as GatewayBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE 1: RouteDefinition
+    ' Each route maps an incoming path+method to a downstream
+    ' service endpoint. Carries its own rate-limit policy.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nRouteDefinition" as Route {
+        <<DefinesIdentity>> -routeId : UUID
+        -serviceId : String
+        -pathPattern : String
+        -methods : List<HttpMethod>
+        -requiresAuth : Boolean
+        -isActive : Boolean
+        __
+        +matchesRequest(path : String,\n  method : HttpMethod) : Boolean
+        +activate() : void
+        +deactivate() : void
+        +attachRateLimit(policy : RateLimitPolicy) : void
+    }
+
+    ' ============================================================
+    ' VALUE OBJECTS
+    ' ============================================================
+    class "<<Value Object>>\nRateLimitPolicy" as RateLimit {
+        -maxRequests : Integer
+        -windowSeconds : Integer
+        __
+        +isExceeded(currentCount : Integer) : Boolean
+    }
+
+    class "<<Value Object>>\nServiceEndpoint" as Endpoint {
+        -serviceId : String
+        -basePath : String
+        -healthCheckPath : String
+    }
+
+    class "<<Value Object>>\nTokenValidationResult" as TokenResult {
+        -valid : Boolean
+        -userId : UUID
+        -role : String
+        -expiresAt : DateTime
+    }
+
+    ' ============================================================
+    ' ENUMERATIONS
+    ' ============================================================
+    enum "<<Enumeration>>\nHttpMethod" as HttpMethod {
+        GET
+        POST
+        PUT
+        DELETE
+        PATCH
+    }
+
+    ' ============================================================
+    ' REPOSITORIES (one per aggregate root)
+    ' ============================================================
+    class "<<Repository>>\nRouteRepository" as RouteRepo {
+        +findByPathAndMethod(path : String,\n  method : HttpMethod) : RouteDefinition [0..1]
+        +findAll() : List<RouteDefinition>
+        +findByServiceId(serviceId : String) : List<RouteDefinition>
+        +save(route : RouteDefinition) : RouteDefinition
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICES
+    ' ============================================================
+    class "<<Service>>\nRequestRouter" as Router {
+        +route(path : String,\n  method : HttpMethod) : ServiceEndpoint
+        +isServiceAvailable(serviceId : String) : Boolean
+    }
+
+    class "<<Service>>\nTokenValidationService" as TokenService {
+        +validate(token : String) : TokenValidationResult
+    }
+
+    class "<<Service>>\nRateLimiter" as RateLimiter {
+        +isAllowed(clientId : String,\n  routeId : UUID) : Boolean
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — PUBLISHED
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nRateLimitExceeded" as EvRateLimit {
+            -clientId : String
+            -routeId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nTokenValidationFailed" as EvTokenFail {
+            -token : String
+            -reason : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nRouteNotFound" as EvRouteNotFound {
+            -requestPath : String
+            -method : String
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+
+    ' Aggregate composition
+    Route "1" *-- "0..1" RateLimit : has >
+    Route "1" *-- "1" Endpoint : routes to >
+
+    ' Enum usage
+    Route --> HttpMethod : allows
+
+    ' Repositories
+    RouteRepo ..> Route : retrieves / persists
+
+    ' Domain Services
+    Router ..> RouteRepo : uses
+    Router ..> EvRouteNotFound : publishes
+    RateLimiter ..> RateLimit : enforces
+    RateLimiter ..> EvRateLimit : publishes
+    TokenService ..> TokenResult : returns
+    TokenService ..> EvTokenFail : publishes
+}
+
+' ============================================================
+' INVARIANTS
+' ============================================================
+note right of Route
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-R1:** Each route must have a unique
+    pathPattern + method combination.
+    //Enforced by: RouteRepository unique//
+    //constraint on (pathPattern, method).//
+
+    **INV-R2:** RateLimitPolicy values must be
+    positive integers if present.
+    //Enforced by: attachRateLimit() validates//
+    //maxRequests > 0 and windowSeconds > 0.//
+
+    **INV-R3:** Inactive routes must not participate
+    in request matching.
+    //Enforced by: matchesRequest() returns false//
+    //when isActive = false.//
+
+    **INV-R4:** Routes with requiresAuth = true
+    must have a valid JWT token present in the
+    request; otherwise the Gateway returns 401.
+    //Enforced by: TokenValidationService called//
+    //before routing. See AuthenticationFilter.//
+end note
+
+note bottom of TokenService
+    **Anti-Corruption Layer (ACL):**
+    Translates Account context's JWT
+    AuthToken into a local
+    TokenValidationResult value object.
+    Gateway never imports Account's
+    internal domain model directly.
+
+    Validates token signature using
+    shared JWT secret (via Config Server).
+    Extracts userId and role claims
+    and injects them as X-User-Id and
+    X-User-Roles headers for downstream
+    services.
+end note
+
+note bottom of Router
+    **Service Discovery Integration:**
+    route() resolves serviceId to a live
+    instance via Eureka service registry.
+    Uses load-balanced URI (lb://serviceId).
+
+    isServiceAvailable() checks Eureka
+    for healthy instances before routing.
+    Returns 503 if no instance available.
+end note
+
+note right of RateLimiter
+    **Resilience Pattern:**
+    Per-client, per-route rate limiting
+    protects downstream services from
+    excessive traffic. Returns HTTP 429
+    when limit exceeded.
+end note
+
+' ============================================================
+' EXTERNAL CONTEXT REFERENCES
+' ============================================================
+package "<<BoundedContext>>\nAccount Context (external)" as AccountExt #E8E8E8 {
+}
+
+GatewayBC .[#616161,dashed].> AccountExt : "REST: validate JWT\n+ role-based routing\n(ACL: AuthToken → TokenValidationResult)"
+
+@enduml

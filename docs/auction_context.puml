@@ -1,0 +1,607 @@
+@startuml Auction Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Auction Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Mykola Vaskevych (22372199)
+
+package "<<BoundedContext>>\nAuction Context" as AuctionBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE 1: Listing
+    ' Separate aggregate from Auction. Created first by seller,
+    ' then an Auction is started referencing it.
+    ' Per existing UML (Fig. 1): Listing 1 -- 1 Auction.
+    ' Per Workflow (Fig. 3): Seller creates listing → sets
+    ' auction params → submits → Auction Service validates.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nListing" as Listing {
+        <<DefinesIdentity>> -listingId : UUID
+        -sellerId : UUID
+        -title : String
+        -description : String
+        -photos : List<String>
+        -categoryId : UUID
+        -isActive : Boolean
+        -createdAt : DateTime
+        __
+        +update(title : String, description : String,\n  photos : List<String>, categoryId : UUID) : void
+        +deactivate() : void
+        +activate() : void
+    }
+
+    ' ============================================================
+    ' AGGREGATE 2: Auction + Bid
+    ' Core aggregate. Auction is the root, Bid is aggregate part.
+    ' Auction references Listing by listingId (separate aggregate).
+    ' ============================================================
+    together {
+        class "<<Aggregate Root, Entity>>\nAuction" as Auction {
+            <<DefinesIdentity>> -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -startingPrice : Money
+            -reservePrice : Money
+            -buyNowPrice : Money [0..1]
+            -currentPrice : Money
+            -duration : AuctionDuration
+            -status : AuctionStatus
+            -version : Long
+            __
+            +placeBid(bidderId : UUID, amount : Money) : Bid
+            +buyNow(buyerId : UUID) : void
+            +close() : void
+            +cancel() : void
+            +markRemoved() : void
+            +markCompleted() : void
+            +revertToEnded() : void
+            +isExpired() : Boolean
+            +highestBid() : Bid [0..1]
+            +bidCount() : Integer
+        }
+
+        class "<<Entity>>\n{aggregateRoot = Auction}\nBid" as Bid {
+            <<DefinesIdentity>> -bidId : UUID
+            -bidderId : UUID
+            -amount : Money
+            -placedAt : DateTime
+            -isWinning : Boolean
+        }
+    }
+
+    ' ============================================================
+    ' AGGREGATE 3: Watchlist
+    ' Independent per-user lifecycle. Tracks auction activity.
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nWatchlist" as Watchlist {
+        <<DefinesIdentity>> -watchlistId : UUID
+        -userId : UUID
+        -watchedAuctionIds : Set<UUID>
+        __
+        +addAuction(auctionId : UUID) : void
+        +removeAuction(auctionId : UUID) : void
+        +isWatching(auctionId : UUID) : Boolean
+        +pruneClosed(auctionId : UUID) : void
+    }
+
+    ' ============================================================
+    ' VALUE OBJECTS
+    ' ============================================================
+    class "<<Value Object>>\nMoney" as Money {
+        -amount : BigDecimal
+        -currency : String {default = "EUR"}
+        __
+        +isGreaterThan(other : Money) : Boolean
+        +add(other : Money) : Money
+        +subtract(other : Money) : Money
+    }
+
+    class "<<Value Object>>\nAuctionDuration" as AuctionDuration {
+        -startTime : DateTime
+        -endTime : DateTime
+        __
+        +isExpired() : Boolean
+        +remainingSeconds() : Long
+    }
+
+    class "<<Value Object>>\nBidderRef" as BidderRef {
+        -userId : UUID
+        -isActive : Boolean
+        __
+        ACL representation of
+        Account context's User.
+    }
+
+    class "<<Value Object>>\nCategoryRef" as CategoryRef {
+        -categoryId : UUID
+        -name : String
+        -isActive : Boolean
+        __
+        Local cache of valid categories.
+        Consumed from Admin context's
+        CategoryCreated / CategoryUpdated
+        / CategoryDeleted events.
+    }
+
+    ' ============================================================
+    ' ENUMERATIONS (aligned with existing UML Fig. 1)
+    ' ============================================================
+    enum "<<Enumeration>>\nAuctionStatus" as AuctionStatus {
+        PENDING
+        ACTIVE
+        SOLD
+        ENDED
+        CANCELLED
+        REMOVED
+        COMPLETED
+    }
+
+    ' ============================================================
+    ' REPOSITORIES (one per aggregate root)
+    ' ============================================================
+    class "<<Repository>>\nListingRepository" as ListingRepo {
+        +findById(listingId : UUID) : Listing
+        +findBySellerId(sellerId : UUID) : List<Listing>
+        +findByCategoryId(categoryId : UUID) : List<Listing>
+        +save(listing : Listing) : Listing
+    }
+
+    class "<<Repository>>\nAuctionRepository" as AuctionRepo {
+        +findById(auctionId : UUID) : Auction
+        +findByListingId(listingId : UUID) : Auction [0..1]
+        +findByStatus(status : AuctionStatus) : List<Auction>
+        +findBySellerId(sellerId : UUID) : List<Auction>
+        +findExpiredActive() : List<Auction>
+        +findByBidderId(bidderId : UUID) : List<Auction>
+        +save(auction : Auction) : Auction
+    }
+
+    class "<<Repository>>\nWatchlistRepository" as WatchlistRepo {
+        +findByUserId(userId : UUID) : Watchlist
+        +save(watchlist : Watchlist) : Watchlist
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICES
+    ' ============================================================
+    class "<<Service>>\nAuctionClosingService" as ClosingService {
+        +closeExpiredAuctions() : void
+    }
+
+    class "<<Service>>\nBidValidationService" as BidValService {
+        +validateBidder(bidderId : UUID) : BidderRef
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — PUBLISHED
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nAuctionCreated" as EvCreated {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -title : String
+            -description : String
+            -photos : List<String>
+            -categoryId : UUID
+            -startingPrice : Money
+            -reservePrice : Money
+            -buyNowPrice : Money [0..1]
+            -endTime : DateTime
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nBidPlaced" as EvBidPlaced {
+            -auctionId : UUID
+            -bidId : UUID
+            -bidderId : UUID
+            -amount : Money
+            -previousHighestBidderId : UUID [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionSold" as EvSold {
+            -auctionId : UUID
+            -listingId : UUID
+            -winnerId : UUID
+            -winningBidAmount : Money
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionEnded" as EvEnded {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionCancelled" as EvCancelled {
+            -auctionId : UUID
+            -listingId : UUID
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nBuyNowExecuted" as EvBuyNow {
+            -auctionId : UUID
+            -listingId : UUID
+            -buyerId : UUID
+            -price : Money
+            -sellerId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nAuctionCompleted" as EvCompleted {
+            -auctionId : UUID
+            -listingId : UUID
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — CONSUMED (from other contexts)
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nListingRemovedByAdmin\n//consumed, owned by Admin//" as EvAdminRemove {
+            -auctionId : UUID
+            -adminId : UUID
+            -reason : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nOrderCompleted\n//consumed, owned by Order//" as EvOrderDone {
+            -orderId : UUID
+            -auctionId : UUID
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nPaymentFailed\n//consumed, owned by Payment//" as EvPayFail {
+            -auctionId : UUID
+            -winnerId : UUID
+            -reason : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryCreated\n//consumed, owned by Admin//" as EvCatCreated {
+            -categoryId : UUID
+            -name : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryUpdated\n//consumed, owned by Admin//" as EvCatUpdated {
+            -categoryId : UUID
+            -name : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nCategoryDeleted\n//consumed, owned by Admin//" as EvCatDeleted {
+            -categoryId : UUID
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+
+    ' Listing -- Auction (separate aggregates, 1:0..1 reference by ID).
+    ' Dashed dependency (not solid association) to signal aggregate
+    ' boundary: Auction references Listing by listingId, not by object.
+    Listing "1" <.. "0..1" Auction : "referenced by ID >"
+
+    ' Aggregate composition: Auction contains Bids
+    Auction "1" *-- "0..*" Bid : contains >
+
+    ' Listing uses CategoryRef for validation
+    Listing ..> CategoryRef : validates categoryId
+
+    ' Value Object usage
+    Auction ..> Money : uses
+    Auction *-- "1" AuctionDuration : duration
+    Bid ..> Money : amount
+
+    ' Enum
+    Auction --> AuctionStatus : status
+
+    ' Repositories
+    ListingRepo ..> Listing : retrieves / persists
+    AuctionRepo ..> Auction : retrieves / persists
+    WatchlistRepo ..> Watchlist : retrieves / persists
+
+    ' Domain Services
+    ClosingService ..> AuctionRepo : queries expired
+    ClosingService ..> Auction : calls close()
+    BidValService ..> BidderRef : returns
+
+    ' Published events
+    Auction ..> EvCreated : publishes
+    Auction ..> EvBidPlaced : publishes
+    Auction ..> EvSold : publishes
+    Auction ..> EvEnded : publishes
+    Auction ..> EvCancelled : publishes
+    Auction ..> EvBuyNow : publishes
+    Auction ..> EvCompleted : publishes
+}
+
+' ============================================================
+' INVARIANTS
+' ============================================================
+note right of Listing
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-L1:** categoryId must reference a
+    valid, active category (validated
+    against local CategoryRef cache).
+
+    **INV-L2:** Listing can only be updated
+    (title, desc, photos) if the associated
+    auction has zero bids.
+    //See README S4: "Edit listing only//
+    //if zero bids."//
+    **⚠ Cross-aggregate invariant:** Listing
+    cannot check Auction's bid count itself
+    (separate aggregates). Enforced at the
+    **Application Service layer**: load both
+    Auction and Listing, verify
+    auction.bidCount() == 0, then call
+    listing.update(). Standard DDD pattern
+    for invariants spanning aggregates.
+
+    **INV-L3:** At least one photo required.
+    //Per FR-AU01, US-AU01.//
+
+    **Listing is a separate aggregate from
+    Auction** because:
+    • It has its own identity (listingId)
+    • It can be edited independently (S4)
+    • Listing is the product data; Auction
+      is the bidding mechanics.
+    Per existing UML (Fig. 1): Listing and
+    Auction are separate classes with 1:1.
+end note
+
+note right of Auction
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-A1:** bid.amount must be strictly
+    greater than currentPrice.
+    //Enforced by: placeBid() — FR-AU02//
+
+    **INV-A2:** Bids only accepted when
+    status = ACTIVE.
+    //Enforced by: placeBid() — US-AU02://
+    //"System rejects bids on non-ACTIVE."//
+
+    **INV-A3:** Buy Now only when status = ACTIVE
+    AND buyNowPrice is set AND buyer ≠ seller.
+    //Enforced by: buyNow() — FR-AU03//
+
+    **INV-A4:** Cancel only when status = ACTIVE
+    AND bidCount() = 0.
+    //Enforced by: cancel() — FR-AU04//
+
+    **INV-A5:** On close():
+    if highestBid().amount >= reservePrice → SOLD
+    else → ENDED.
+    //Enforced by: close() — FR-AU05//
+
+    **INV-A6:** Concurrent bid protection via
+    optimistic locking (@Version field).
+    //Prevents race conditions — NF11, NF13//
+
+    **INV-A7:** Bidder must not be BANNED or
+    SUSPENDED. Validated via BidValidationService
+    ACL call to Account context.
+
+    **INV-A8:** Seller cannot bid on own auction.
+    bidderId ≠ sellerId.
+    //Enforced by: placeBid()//
+    //**sellerId is a denormalised copy of**//
+    //**Listing.sellerId**, captured at auction//
+    //creation and immutable thereafter. Lets//
+    //placeBid() enforce the rule without loading//
+    //the Listing aggregate (standard DDD trick//
+    //for invariants that would otherwise span//
+    //aggregate boundaries).//
+
+    **INV-A9:** currentPrice always equals
+    max(bid.amount) or startingPrice if no bids.
+    //Updated atomically by placeBid()//
+
+    **Note on Escrow:** In the original UML (Fig. 1),
+    Bid has a "secured by" relationship with Escrow.
+    In this DDD model, Escrow lives in Payment
+    context. The link is via events: AuctionSold
+    carries winnerId + amount → Payment creates
+    Escrow. This is an inter-context reference
+    by ID, not a direct object association.
+end note
+
+note right of AuctionStatus
+    **State Transitions:**
+    ————————————————
+    PENDING → ACTIVE   (on creation, immediate)
+    ACTIVE  → SOLD     (close: highestBid ≥ reserve)
+    ACTIVE  → SOLD     (buyNow: buyer ≠ seller, price set)
+    ACTIVE  → ENDED    (close: no qualifying bid)
+    ACTIVE  → CANCELLED (seller cancels, 0 bids)
+    ACTIVE  → REMOVED  (admin moderation)
+    PENDING → REMOVED  (admin moderation, rare)
+    SOLD    → COMPLETED (settlement finished)
+    SOLD    → ENDED     (PaymentFailed — compensating)
+
+    **Terminal states** (no outgoing transitions):
+    COMPLETED, ENDED, CANCELLED, REMOVED.
+    //ENDED is terminal only in the non-compensating//
+    //path; SOLD→ENDED is a compensating reversal,//
+    //after which the auction is settled as ENDED.//
+
+    PENDING is transient: auctions transition to
+    ACTIVE immediately (US-AU01). Per Application
+    Lifecycle (Section 3.2) and existing UML (Fig. 1).
+end note
+
+note right of Watchlist
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-W1:** Cannot watch same auction twice.
+    **INV-W2:** Only ACTIVE auctions may be **added**.
+    Closed auctions are pruned automatically:
+    Watchlist subscribes (in-process) to
+    AuctionSold, AuctionEnded, AuctionCancelled,
+    AuctionCompleted and removes the auctionId
+    from every watchlist that contains it via
+    pruneClosed(). This keeps INV-W2 truthful
+    without weakening it.
+
+    **Design decision:** In Auction context
+    (not Catalogue) because watchlist triggers
+    auction-related notifications (outbid,
+    ending) per B9, B11, B12 in README, and
+    the in-process prune handler is cheaper
+    than a cross-context projection.
+end note
+
+note bottom of ClosingService
+    **@Scheduled task** (FR-AU05).
+    Finds: endTime < now() AND status = ACTIVE.
+    Calls auction.close() on each.
+    Publishes AuctionSold or AuctionEnded.
+end note
+
+note bottom of BidValService
+    **Anti-Corruption Layer (ACL):**
+    REST call to Account context.
+    Maps User → BidderRef value object.
+    Auction context never imports
+    Account's internal domain model.
+
+    **Freshness policy:** live REST call
+    **per bid attempt**, no local BidderRef
+    cache. Trades a few ms of latency per
+    bid for guaranteed freshness of INV-A7
+    (banned/suspended bidders). Acceptable
+    per NF13 (bid path latency budget).
+    Admin suspends/bans are therefore
+    instant-effective without needing an
+    event subscription to UserStatusChanged.
+end note
+
+note bottom of EvAdminRemove
+    **Handler:** auction.markRemoved()
+    → status = REMOVED.
+    Per FR-AD07, US-AD06.
+end note
+
+note bottom of EvOrderDone
+    **Handler:** auction.markCompleted()
+    → SOLD → COMPLETED.
+    Final state per Application
+    Lifecycle (Section 3.2).
+end note
+
+note bottom of EvPayFail
+    **Handler (compensating):**
+    auction.revertToEnded()
+    → SOLD → ENDED.
+    Order is also cancelled.
+    Per Saga pattern (Section 3.2).
+end note
+
+note bottom of EvCatCreated
+    **Category Event Handlers:**
+    CategoryCreated → add to local
+    CategoryRef cache.
+    CategoryUpdated → update name in cache.
+    CategoryDeleted → mark inactive in cache.
+    Listing.categoryId validated against
+    this cache (INV-L1).
+end note
+
+note bottom of Money
+    **Immutable Value Object.**
+    Equality: (amount, currency).
+    DB: NUMERIC(12,2) — NF6.
+end note
+
+note right of Bid
+    **Aggregate Part** — only accessed
+    via Auction root. Entity (not VO)
+    because each bid has unique identity
+    for bid history dashboard (US-AU05).
+
+    **CQRS note:** For high-volume auctions,
+    consider separate read model to avoid
+    loading all bids per aggregate fetch.
+end note
+
+note bottom of EvCreated
+    AuctionCreated is a **self-contained**
+    Published Language event: it carries
+    every field the Catalogue read projection
+    needs (title, description, photos,
+    categoryId, startingPrice, reservePrice,
+    buyNowPrice, endTime) so consumers
+    never have to call back to Auction.
+    See FR-C01, FR-C02.
+
+    //Per Sorgalla 2021 §Background — MSA//
+    //service-specific independence requires//
+    //events to be consumer-complete to//
+    //preserve loose coupling.//
+end note
+
+' ============================================================
+' EXTERNAL CONTEXT REFERENCES
+' ============================================================
+package "<<BoundedContext>>\nAccount Context (external)" as AccountBC #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nCatalogue Context (external)" as CatalogueBC #E8E8E8 {
+}
+
+AuctionBC .[#0277BD,dashed].> AccountBC : "<<Customer-Supplier>>\nREST: validate bidder\n(ACL: User → BidderRef)"
+
+AuctionBC .[#777777,dashed].> CatalogueBC : "Catalogue is a **read projection**.\nConsumes AuctionCreated events to\nindex listings for search/filtering.\nAuction context owns listing data.\nPer Workflow Diagram (Fig. 3)."
+
+' ============================================================
+' SAGA NOTE
+' ============================================================
+note bottom of AuctionBC
+    **Auction-Close Saga (choreography-based):**
+    ——————————————————————————————
+    **Happy path (per Workflow Diagram Fig. 3):**
+    1. AuctionClosingService → auction.close() → **AuctionSold**
+    2. Payment → deducts buyer wallet → **PaymentDeducted**
+    3. Payment → holds funds in escrow (HELD) → **EscrowHeld**
+    4. Order → creates order (AWAITING_COLLECTION) → **OrderCreated**
+    5. Delivery → driver accepts job → **DeliveryJobCreated**
+    6. **Two-step verification (FR-DE02):**
+       6a. Seller confirms collection (verifies driver) → **GoodsCollected**
+       6b. Order → BEING_DELIVERED
+    7. Driver transports, marks DELIVERED
+    8. **Buyer confirms receipt** → **DeliveryConfirmed**
+    9. Payment → releases escrow to seller wallet → **EscrowReleased**
+    10. Order → COMPLETED → **OrderCompleted**
+    11. Auction → COMPLETED → **AuctionCompleted**
+
+    **Compensating events:**
+    • **PaymentFailed** → Order cancelled, Auction reverts to ENDED
+    • **DeliveryDisputed** (FR: buyer raises dispute) → Escrow HELD, admin reviews
+    • Eventual consistency via Saga; no distributed ACID.
+      Per Architecture doc Section 3.2.
+end note
+
+@enduml

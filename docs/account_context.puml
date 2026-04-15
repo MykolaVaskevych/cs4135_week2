@@ -1,0 +1,278 @@
+@startuml Account Bounded Context - DDD Tactical Design
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam classFontSize 13
+skinparam packageFontSize 14
+skinparam noteFontSize 11
+skinparam defaultFontSize 12
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle frame
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+title **BidHub — Account Bounded Context**\nDDD Tactical Design — UML Class Diagram with DDD Stereotypes\nOwner: Xunze Tan (24247472)
+
+' ============================================================
+' BOUNDED CONTEXT
+' ============================================================
+package "<<BoundedContext>>\nAccount Context" as AccountBC #F5F5F5 {
+
+    ' ============================================================
+    ' AGGREGATE 1: User + ShippingAddress
+    ' User is the root. ShippingAddress is an aggregate part
+    ' (entity with own identity, accessed only through User).
+    ' AuthToken is a Value Object returned by login().
+    ' ============================================================
+    class "<<Aggregate Root, Entity>>\nUser" as User {
+        <<DefinesIdentity>> -userId : UUID
+        -email : String
+        -passwordHash : String
+        -firstName : String
+        -lastName : String
+        -role : UserRole
+        -status : AccountStatus
+        -createdAt : DateTime
+        __
+        +register() : void
+        +updateProfile(firstName : String,\n  lastName : String) : void
+        +changePassword(oldHash : String,\n  newHash : String) : void
+        +addAddress(address : ShippingAddress) : void
+        +removeAddress(addressId : UUID) : void
+        +setDefaultAddress(addressId : UUID) : void
+        +suspend(adminId : UUID, reason : String) : void
+        +ban(adminId : UUID, reason : String) : void
+        +reactivate(adminId : UUID) : void
+    }
+
+    class "<<Entity>>\n{aggregateRoot = User}\nShippingAddress" as Address {
+        <<DefinesIdentity>> -addressId : UUID
+        -addressLine1 : String
+        -addressLine2 : String [0..1]
+        -city : String
+        -county : String
+        -eircode : String
+        -isDefault : Boolean
+    }
+
+    ' ============================================================
+    ' VALUE OBJECTS
+    ' ============================================================
+    class "<<Value Object>>\nAuthToken" as AuthToken {
+        -token : String
+        -issuedAt : DateTime
+        -expiresAt : DateTime
+    }
+
+    ' ============================================================
+    ' ENUMERATIONS
+    ' ============================================================
+    enum "<<Enumeration>>\nUserRole" as UserRole {
+        BUYER
+        SELLER
+        DELIVERY_DRIVER
+        ADMIN
+    }
+
+    enum "<<Enumeration>>\nAccountStatus" as AccountStatus {
+        ACTIVE
+        SUSPENDED
+        BANNED
+    }
+
+    ' ============================================================
+    ' REPOSITORIES (one per aggregate root)
+    ' ============================================================
+    class "<<Repository>>\nUserRepository" as UserRepo {
+        +findById(userId : UUID) : User
+        +findByEmail(email : String) : User [0..1]
+        +findByStatus(status : AccountStatus) : List<User>
+        +existsByEmail(email : String) : Boolean
+        +save(user : User) : User
+        +delete(userId : UUID) : void
+    }
+
+    ' ============================================================
+    ' DOMAIN SERVICES
+    ' ============================================================
+    class "<<Service>>\nAuthenticationService" as AuthService {
+        +authenticate(email : String,\n  password : String) : AuthToken
+        +validateToken(token : String) : Boolean
+        +refreshToken(token : String) : AuthToken
+    }
+
+    class "<<Service>>\nPasswordResetService" as PwdService {
+        +requestReset(email : String) : void
+        +confirmReset(resetToken : String,\n  newPassword : String) : void
+    }
+
+    ' ============================================================
+    ' DOMAIN EVENTS — PUBLISHED
+    ' ============================================================
+    together {
+        class "<<Domain Event>>\nUserRegistered" as EvRegistered {
+            -userId : UUID
+            -email : String
+            -role : UserRole
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nUserStatusChanged" as EvStatusChanged {
+            -userId : UUID
+            -previousStatus : AccountStatus
+            -newStatus : AccountStatus
+            -changedBy : UUID
+            -reason : String [0..1]
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nPasswordResetRequested" as EvPwdReset {
+            -userId : UUID
+            -email : String
+            -occurredAt : DateTime
+        }
+
+        class "<<Domain Event>>\nProfileUpdated" as EvProfileUpdated {
+            -userId : UUID
+            -changedFields : List<String>
+            -occurredAt : DateTime
+        }
+    }
+
+    ' ============================================================
+    ' RELATIONSHIPS
+    ' ============================================================
+
+    ' Aggregate composition: User contains ShippingAddresses
+    User "1" *-- "0..*" Address : has >
+
+    ' Enum usage
+    User --> UserRole : role
+    User --> AccountStatus : status
+
+    ' Repositories
+    UserRepo ..> User : retrieves / persists
+
+    ' Domain Services
+    AuthService ..> UserRepo : uses
+    AuthService ..> AuthToken : creates
+    PwdService ..> UserRepo : uses
+
+    ' Event publishing
+    User ..> EvRegistered : publishes on register()
+    User ..> EvStatusChanged : publishes on suspend() / ban()
+    User ..> EvProfileUpdated : publishes on updateProfile()
+    PwdService ..> EvPwdReset : publishes
+}
+
+' ============================================================
+' INVARIANTS
+' ============================================================
+note right of User
+    **Aggregate Invariants:**
+    ————————————————
+    **INV-U1:** Email must be unique across all users.
+    //Enforced by: UserRepository unique constraint//
+    //+ existsByEmail() check before register().//
+
+    **INV-U2:** Password must meet complexity requirements
+    (min 8 chars, mixed case, digit, special char).
+    //Enforced by: register() and changePassword()//
+    //validate hash input before persisting.//
+
+    **INV-U3:** Only one ShippingAddress can be marked
+    as default per user.
+    //Enforced by: setDefaultAddress() — clears//
+    //previous default before setting new one.//
+
+    **INV-U4:** Role change must be performed by ADMIN only.
+    //Enforced by: Application Service layer checks//
+    //caller role via X-User-Roles header from Gateway.//
+
+    **INV-U5:** Status transitions are constrained:
+    ACTIVE → SUSPENDED (suspend)
+    ACTIVE → BANNED (ban)
+    SUSPENDED → ACTIVE (reactivate)
+    SUSPENDED → BANNED (ban)
+    BANNED is terminal — no transition out.
+    //Enforced by: suspend(), ban(), reactivate()//
+    //throw IllegalStateException on invalid transition.//
+
+    **INV-U6:** suspend() and ban() require non-null
+    adminId and reason.
+    //Enforced by: method precondition checks.//
+    //Publishes UserStatusChanged for downstream//
+    //consumers (Notification context).//
+end note
+
+note right of Address
+    **Aggregate Part** — only accessed
+    via User root. Entity (not VO)
+    because each address has unique
+    identity (addressId) and mutable
+    isDefault flag.
+
+    **Eircode** is Ireland-specific
+    postal code format (e.g., D02 AF30).
+end note
+
+note bottom of AuthService
+    **Domain Service Rationale:**
+    authenticate() orchestrates:
+    1. Lookup user by email (UserRepo)
+    2. Verify password hash
+    3. Check status ≠ BANNED / SUSPENDED
+    4. Generate JWT AuthToken
+    5. Return token to caller
+
+    validateToken() is called by API Gateway
+    context (via REST ACL) for JWT validation
+    on every authenticated request.
+end note
+
+note bottom of PwdService
+    **Domain Service Rationale:**
+    Password reset is a two-step process
+    spanning multiple requests:
+    1. requestReset() → generates reset token,
+       publishes PasswordResetRequested
+       → Notification ctx sends email
+    2. confirmReset() → validates token,
+       updates password hash
+end note
+
+note right of AccountStatus
+    **State Transitions:**
+    ————————————————
+    ACTIVE → SUSPENDED (admin suspends)
+    ACTIVE → BANNED (admin bans)
+    SUSPENDED → ACTIVE (admin reactivates)
+    SUSPENDED → BANNED (admin escalates)
+    BANNED → (terminal, no exit)
+
+    Triggered via Admin context REST call
+    to Account's suspend/ban/reactivate
+    endpoints. Account publishes
+    UserStatusChanged event.
+end note
+
+' ============================================================
+' EXTERNAL CONTEXT REFERENCES
+' ============================================================
+package "<<BoundedContext>>\nAuction Context (external)" as AuctionExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nAdmin Context (external)" as AdminExt #E8E8E8 {
+}
+
+package "<<BoundedContext>>\nAPI Gateway (external)" as GatewayExt #E8E8E8 {
+}
+
+AuctionExt .[#0277BD,dashed].> AccountBC : "<<Customer-Supplier>>\nREST: validate bidder\n(ACL: User → BidderRef)"
+AdminExt .[#0277BD,dashed].> AccountBC : "<<Customer-Supplier>>\nREST: search/read users,\nsuspend/ban user\n(ACL: User → UserSnapshot)"
+GatewayExt .[#616161,dashed].> AccountBC : "REST: validate JWT\n+ role-based routing"
+
+@enduml

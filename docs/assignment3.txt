@@ -1,0 +1,332 @@
+
+
+Assignment 3:
+
+Strategic architecture development: In this phase of the project, students identify and document bounded contexts, create a context map of the system, and prototype the architecture. This phase contains three parts:
+
+    Tactical design (according to DD): Divide up the identified bounded contexts in the team (each team member being responsible for one bounded context), refine and model each bounded context using DDD’s basic building blocks (using UML as proposed in https://dl.acm.org/doi/10.1007/s42979-021-00825-z
+    Further explore and enrich your domains by performing event storming and domain storytelling. 
+    Implementation of the architecture: Implement your design based on the selected architecture (Example: each team member is responsible for one microservice), integrate the microservices with service discovery, centralised configuration, resilience (using patterns like circuit breakers), and a rudimentary user interface for testing the system.
+
+Strategic Architecture Development (Group) – 30 Marks
+
+The architecture development phase is divided into the following three parts: 
+
+Part A Tactical Design (DDD + UML) – 10 Marks
+
+In this part, you need to divide the bounded contexts among team members, refine and model each bounded context using DDD’s building blocks (Entities, Value Objects, Aggregates, Repositories, Domain Services, Domain Events) and UML, as described in the referenced approach. Read Part 1 and Part 9 of Learning Domain Driven Design, UML Diagrams and Lecture Week 7.
+
+Criteria
+	
+
+Excellent (Full Marks)
+	
+
+Good
+	
+
+Basic
+	
+
+Poor (0)
+	
+
+Marks
+
+A1. Ownership & Division of Bounded Contexts
+	
+
+All contexts are explicitly allocated; ownership is clear in repo/Wiki; cross‑context dependencies are acknowledged. The contribution of each team member is clear in the Table of Contribution.
+	
+
+Most contexts allocated; minor gaps in ownership clarity.
+	
+
+Context ownership is vague or uneven.
+	
+
+No clear allocation.
+	
+
+2
+
+A2.
+
+DDD Modelling within Each Context (UML).
+	
+
+UML models accurately capture Entities, Value Objects, Aggregates, Repositories, Domain Services, and Domain Events using correct notation and multiplicities; a ubiquitous language is applied.
+	
+
+Mostly correct modelling with small omissions or notation issues.
+	
+
+Models are superficial or omit several building blocks.
+	
+
+No meaningful modelling or incorrect usage.
+	
+
+2
+
+A3.
+
+Aggregate Design & Invariants
+	
+
+Aggregate boundaries are justified; invariants and transactional consistency rules are explicit (e.g., in notes or constraints).
+	
+
+Boundaries are mostly appropriate; invariants are partially addressed.
+	
+
+Weak rationale; invariants unclear.
+	
+
+No aggregate rationale.
+	
+
+2
+
+A4. Inter‑Context Contracts
+	
+
+Published language/ACLs or APIs specified; clear responsibilities and anti‑corruption strategies documented.
+	
+
+Contracts present but with limited detail or rationale.
+	
+
+Interfaces are unclear or incomplete.
+	
+
+No contracts identified.
+	
+
+2
+
+A5. Conformance to UML/DDD Notation Guidance
+	
+
+Consistent with the proposed UML notation for DDD, models are readable and versioned.
+	
+
+Minor notation inconsistencies.
+	
+
+Multiple inconsistencies; readability issues.
+	
+
+Notation disregarded.
+	
+
+2
+
+ 
+
+ 
+
+ 
+
+Part B: Event Storming & Domain Storytelling – 10 Marks
+
+In this part, you should explore and enrich domains with collaborative discovery techniques. Domain knowledge, domain knowledge discovery and event-driven architecture styles are the key topics that will be assessed in this part. Read Part 1, Analysing business domain, and Part 2, domain knowledge discovery and Lecture 7 and Lecture 8
+
+Criteria
+	
+
+Excellent (Full Marks)
+	
+
+Good
+	
+
+Basic
+	
+
+Poor (0)
+	
+
+Marks
+
+B1.
+
+Event Storming Outcomes
+	
+
+Comprehensive flow of domain events, commands, policies, actors, hotspots, conflicts, and uncertainties tagged; outputs trace to model changes/backlog.
+	
+
+Solid flow with minor gaps or missing tags.
+	
+
+Fragmented flow; key events/commands missing.
+	
+
+No credible outcomes.
+	
+
+3
+
+B2. Translation of Insights
+	
+
+Clear linkage from stakeholders' insights to updated models/backlog items; deltas are committed and explained.
+	
+
+Most insights translated; some deltas unclear.
+	
+
+Limited translation; few actionable items.
+	
+
+No translation to artefacts.
+	
+
+3
+
+B3. Domain Storytelling
+	
+
+Narratives capture real actor roles, triggers, steps, and outcomes; are validated with stakeholders; improves ubiquitous language.
+	
+
+Narratives mostly correct; partial validation.
+	
+
+Narratives are shallow or generic; not validated.
+	
+
+No meaningful stories.
+	
+
+2
+
+B4. Facilitation & Evidence
+	
+
+Well‑documented sessions (boards/screenshots), participant lists, dates, and decisions captured in the Wiki.
+	
+
+Evidence is present but incomplete.
+	
+
+Sparse evidence.
+	
+
+No evidence.
+	
+
+2
+
+ 
+
+Part C: Implementation of the Architecture – 10 Marks
+
+In this part, you need to implement the selected architecture (e.g., microservices or any other architecture style selected), one service or component per team member; consider equal contribution, integrate with discovery, centralised config, resilience, and a UI to test end‑to‑end.
+
+Criteria
+	
+
+Excellent (Full Marks)
+	
+
+Good
+	
+
+Basic
+	
+
+Poor (0)
+	
+
+Marks
+
+C1.
+
+Service per Bounded Context
+	
+
+Each service aligns to its context’s model and invariants; build/run instructions and tests are included.
+	
+
+Most services align; minor gaps or missing tests.
+	
+
+Partial alignment; significant gaps in tests/docs.
+	
+
+Services are missing or not aligned.
+	
+
+2
+
+C2.
+
+Service Discovery
+	
+
+Dynamic discovery configured and demonstrably used (e.g., Eureka/Consul/Kubernetes).
+	
+
+Configured, but usage or docs are partially unclear.
+	
+
+Partially wired or fragile.
+	
+
+Not implemented.
+	
+
+2
+
+C3. Centralized Configuration
+	
+
+Externalised config (e.g., config server/KV) with environment separation and versioning.
+	
+
+Config centralized but minimal environment handling.
+	
+
+Rudimentary or ad‑hoc configs.
+	
+
+Not implemented.
+	
+
+2
+
+C4. Resilience Patterns
+	
+
+Circuit breakers plus timeouts/retries/fallbacks applied to critical calls; failures demonstrated and observed.
+	
+
+A circuit breaker is present in limited scenarios.
+	
+
+Basic timeouts only; no circuit breaker.
+	
+
+No resilience patterns.
+	
+
+2
+
+C5. Integration & Tests
+	
+
+Inter‑service communication proven with integration/contract tests and traceable scenarios.
+	
+
+Integration works; limited automated tests.
+	
+
+Manual-only tests; brittle integrations.
+	
+
+No integration proof.
+	
+
+2
