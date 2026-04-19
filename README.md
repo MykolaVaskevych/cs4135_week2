@@ -178,6 +178,100 @@ git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
 git submodule update --init --recursive
 ```
 
+## Peer Review Quick Start
+
+If you are reviewing this project, follow these steps to run the full stack locally.
+
+### Prerequisites
+
+- **Java 21** — [Eclipse Temurin](https://adoptium.net/) recommended
+- **Docker Desktop** — required for PostgreSQL and all backend services
+- **Node.js 22** — required for frontend dev mode
+- **Git** — with submodule support
+
+### Step 1: Clone
+
+```bash
+git clone --recurse-submodules git@github.com:MykolaVaskevych/cs4135_BidHub.git
+cd cs4135_BidHub
+```
+
+### Step 2: Start backend (all services + database)
+
+```bash
+cd backend
+docker compose up --build
+```
+
+First build takes ~5 minutes (Maven downloads + Docker images). After that, all 11 services + PostgreSQL will be running.
+
+### Step 3: Start frontend
+
+Open a **new terminal**:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Step 4: Open in browser
+
+| What | URL |
+|------|-----|
+| **Frontend** | http://localhost:5173 |
+| **API Gateway** | http://localhost:8080 |
+| **Eureka Dashboard** | http://localhost:8761 |
+| **Swagger UI (Auction)** | http://localhost:8083/swagger-ui/index.html |
+| **Swagger UI (Admin)** | http://localhost:8087/swagger-ui/index.html |
+
+### Test accounts
+
+A default admin account is created automatically on startup:
+
+| Role | Email | Password |
+|------|-------|----------|
+| Admin | `admin@bidhub.local` | `Admin123!` |
+
+To create a buyer or seller account, use the **Register** page on the frontend. Password must contain uppercase, lowercase, digit, and special character (min 8 chars).
+
+### Quick API test
+
+```bash
+# Register a test user
+curl -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"reviewer@test.com","password":"Review1!","firstName":"Peer","lastName":"Reviewer","role":"BUYER"}'
+
+# Login (returns JWT)
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"reviewer@test.com","password":"Review1!"}'
+```
+
+### Services overview
+
+| Service | Port | Description |
+|---------|------|-------------|
+| eureka-server | 8761 | Service discovery (Spring Cloud Netflix) |
+| config-server | 8888 | Centralised configuration (Spring Cloud Config) |
+| api-gateway | 8080 | Edge routing + JWT validation (Spring Cloud Gateway) |
+| account-service | 8081 | Auth, profile, addresses, admin user management |
+| catalog-service | 8082 | Search, categories, active-count |
+| auction-service | 8083 | Listings, auctions, bids, watchlist |
+| order-service | 8084 | Order lifecycle |
+| payment-service | 8085 | Wallet, top-up, deduct, transactions |
+| notification-service | 8086 | Send, list, templates |
+| admin-service | 8087 | Categories, reports, moderation, dashboard |
+| delivery-service | 8088 | Delivery job lifecycle |
+
+### Known limitations
+
+- **No message broker** — services communicate via REST only; async domain events are not yet implemented.
+- **catalog-service** is a read-projection — no data is indexed from Auction events yet; search returns empty unless seeded manually.
+
+---
+
 ## Running the Project
 
 ### Full stack (Docker)
