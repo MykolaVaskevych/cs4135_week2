@@ -67,6 +67,7 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/bidhub_accounts
       DB_USERNAME: bidhub
       DB_PASSWORD: bidhub_dev_password
+      JWT_SECRET: ${JWT_SECRET:-bidhub-local-dev-secret-key-minimum-32-characters-long}
     ports:
       - "8081:8081"
     depends_on:
