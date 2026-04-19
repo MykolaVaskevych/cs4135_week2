@@ -114,11 +114,12 @@ services:
       dockerfile: order-service/Dockerfile
     container_name: bidhub-order
     environment:
+      CONFIG_SERVER_URL: http://config-server:8888
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
       - "8084:8084"
     depends_on:
-      eureka-server:
+      config-server:
         condition: service_healthy
 
   payment-service:
@@ -127,11 +128,12 @@ services:
       dockerfile: payment-service/Dockerfile
     container_name: bidhub-payment
     environment:
+      CONFIG_SERVER_URL: http://config-server:8888
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     ports:
       - "8085:8085"
     depends_on:
-      eureka-server:
+      config-server:
         condition: service_healthy
 
   notification-service:
@@ -217,8 +219,8 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: bidhub-frontend
     environment:
       API_GATEWAY_URL: http://api-gateway:8080
