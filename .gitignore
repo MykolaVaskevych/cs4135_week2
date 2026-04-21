@@ -1,2 +1,10 @@
 ~$b 1 Backend Setup.docx
 ~$b 1 Frontend Setup.docx
+
+# JMeter test outputs
+jmeter.log
+*.jtl
+
+# Accidental npm artifacts at repo root (frontend has its own)
+/package-lock.json
+/node_modules/
